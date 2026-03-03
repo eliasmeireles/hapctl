@@ -1,0 +1,12 @@
+binds:
+  - name: nginx-app2
+    enabled: true
+    override: true
+    description: "Nginx App 2 running in Docker container on port 8081"
+    type: http
+    ip: "*"
+    port: 81
+    backend:
+      servers:
+        - name: app2-backend
+          address: 127.0.0.1:8081

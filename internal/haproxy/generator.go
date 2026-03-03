@@ -95,7 +95,6 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 	var builder strings.Builder
 
 	frontendName := NamePrefix + bind.Name
-	backendName := NamePrefix + bind.Name + "-backend"
 
 	fmt.Fprintf(&builder, "# %s\n", bind.Description)
 	fmt.Fprintf(&builder, "frontend %s\n", frontendName)
@@ -103,6 +102,15 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 	bindAddr := g.formatBindAddress(bind)
 	fmt.Fprintf(&builder, "    bind %s\n", bindAddr)
 	builder.WriteString("    mode http\n")
+
+	// Handle redirect configuration
+	if bind.Redirect != nil {
+		g.generateRedirectRules(&builder, bind.Redirect)
+		return builder.String()
+	}
+
+	// Normal backend configuration
+	backendName := NamePrefix + bind.Name + "-backend"
 	fmt.Fprintf(&builder, "    default_backend %s\n\n", backendName)
 
 	fmt.Fprintf(&builder, "backend %s\n", backendName)
@@ -117,6 +125,25 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 	}
 
 	return builder.String()
+}
+
+func (g *Generator) generateRedirectRules(builder *strings.Builder, redirect *models.Redirect) {
+	code := redirect.Code
+	if code == 0 {
+		code = 301
+	}
+
+	scheme := redirect.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	if redirect.Port > 0 && redirect.Port != 443 {
+		fmt.Fprintf(builder, "    redirect prefix %s://%%[req.hdr(Host)]:%d%%[capture.req.uri] code %d\n",
+			scheme, redirect.Port, code)
+	} else {
+		fmt.Fprintf(builder, "    redirect scheme %s code %d\n", scheme, code)
+	}
 }
 
 func (g *Generator) generateTCPConfig(bind *models.Bind) string {

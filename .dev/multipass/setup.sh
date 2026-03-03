@@ -79,7 +79,7 @@ wait_for_vm() {
     sleep 10
 
     for i in {1..30}; do
-        if multipass exec "$VM_NAME" -- systemctl is-active nginx &> /dev/null; then
+        if multipass exec "$VM_NAME" -- systemctl is-active docker &> /dev/null; then
             echo "✅ VM is ready"
             return 0
         fi
@@ -103,9 +103,13 @@ prepare_volume() {
     make build
     make build-webhook-test
 
-    # Copy files to volume (configs and examples only)
+    # Copy files to volume
     cp "$SCRIPT_DIR/config.yaml" "$VOLUMES_DIR/"
-    cp "$SCRIPT_DIR/test-bind.yaml" "$VOLUMES_DIR/resources/"
+    cp "$SCRIPT_DIR/nginx-apps-https.yaml" "$VOLUMES_DIR/resources/"
+    cp "$SCRIPT_DIR/docker-compose.yml" "$VOLUMES_DIR/"
+    cp -r "$SCRIPT_DIR/html" "$VOLUMES_DIR/"
+    cp "$SCRIPT_DIR/generate-ssl.sh" "$VOLUMES_DIR/"
+    cp "$SCRIPT_DIR/configure-ssl.sh" "$VOLUMES_DIR/"
 
     echo "✅ Volume prepared at: $VOLUMES_DIR"
 }
@@ -156,6 +160,50 @@ install_haproxy() {
     multipass exec "$VM_NAME" -- sudo hapctl install
 
     echo "✅ HAProxy installed"
+}
+
+start_docker_containers() {
+    echo ""
+    echo "Starting Docker containers..."
+
+    # Start containers using docker compose
+    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/hapctl && docker compose up -d"
+
+    # Wait for containers to be healthy
+    sleep 5
+
+    # Check container status
+    multipass exec "$VM_NAME" -- docker ps
+
+    echo "✅ Docker containers started"
+}
+
+setup_ssl() {
+    echo ""
+    echo "Setting up SSL certificate..."
+
+    # Make scripts executable
+    multipass exec "$VM_NAME" -- chmod +x /home/ubuntu/hapctl/generate-ssl.sh
+    multipass exec "$VM_NAME" -- chmod +x /home/ubuntu/hapctl/configure-ssl.sh
+
+    # Generate self-signed certificate
+    multipass exec "$VM_NAME" -- sudo bash /home/ubuntu/hapctl/generate-ssl.sh
+
+    echo "✅ SSL certificate generated"
+}
+
+configure_ssl_haproxy() {
+    echo ""
+    echo "Configuring SSL in HAProxy..."
+
+    # Wait for hapctl to generate configs
+    echo "Waiting for hapctl agent to generate configs..."
+    sleep 10
+
+    # Configure SSL in HAProxy
+    multipass exec "$VM_NAME" -- sudo bash /home/ubuntu/hapctl/configure-ssl.sh
+
+    echo "✅ SSL configured in HAProxy"
 }
 
 setup_haproxy_config() {
@@ -214,11 +262,15 @@ show_info() {
     echo "  VM:   /home/ubuntu/hapctl"
     echo "  Symlinked: /etc/hapctl -> /home/ubuntu/hapctl"
     echo ""
-    echo "Test application (nginx):"
-    echo "  http://$VM_IP:8080"
+    echo "Test applications (Docker containers):"
+    echo "  App 1: http://$VM_IP:8080"
+    echo "  App 2: http://$VM_IP:8081"
     echo ""
-    echo "After starting hapctl agent, HAProxy will be available at:"
-    echo "  http://$VM_IP:80"
+    echo "HAProxy with SSL is running:"
+    echo "  HTTP:  http://$VM_IP:80 (redirects to HTTPS)"
+    echo "  HTTPS: https://$VM_IP:443 (load balancer with self-signed cert)"
+    echo ""
+    echo "Note: Self-signed certificate - use 'curl -k' to ignore SSL warnings"
     echo ""
     echo "Useful commands:"
     echo "  multipass shell $VM_NAME              # Access VM shell"
@@ -269,8 +321,19 @@ main() {
     install_hapctl
     install_webhook_test
     install_haproxy
+    start_docker_containers
     setup_haproxy_config
+    setup_ssl
     setup_systemd_service
+
+    # Start agent to generate configs
+    echo ""
+    echo "Starting hapctl agent to generate initial configs..."
+    multipass exec "$VM_NAME" -- sudo systemctl start hapctl-agent
+
+    # Configure SSL after configs are generated
+    configure_ssl_haproxy
+
     show_info
 }
 

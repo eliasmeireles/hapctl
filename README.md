@@ -14,6 +14,7 @@ HAProxy Control - A modern CLI tool for managing HAProxy configurations dynamica
     - Automatic cleanup of orphaned configurations
     - File watcher with 5-minute fallback scheduler
 - **HTTP & TCP Support**: Configure both HTTP and TCP frontends/backends
+- **HTTP Redirects**: Automatic HTTP to HTTPS redirects with configurable status codes
 - **Health Monitoring**: Monitor bind health and send webhook notifications
     - Configurable monitoring interval (default: 30s)
     - Webhook notifications with detailed bind status
@@ -228,7 +229,9 @@ config:
 
 📖 **[Complete SSL Management Documentation](docs/SSL_MANAGEMENT.md)**
 
-### Bind Configuration Example
+### Bind Configuration Examples
+
+#### TCP Backend
 
 ```yaml
 binds:
@@ -244,6 +247,65 @@ binds:
         - name: server1
           address: 127.0.0.1:7777
 ```
+
+#### HTTP Load Balancer
+
+```yaml
+binds:
+  - name: web-app
+    enabled: true
+    override: true
+    description: "Web application load balancer"
+    type: http
+    ip: "*"
+    port: 80
+    backend:
+      servers:
+        - name: app1
+          address: 127.0.0.1:8080
+        - name: app2
+          address: 127.0.0.1:8081
+```
+
+#### HTTP to HTTPS Redirect
+
+```yaml
+binds:
+  # Redirect HTTP to HTTPS
+  - name: http-redirect
+    enabled: true
+    override: true
+    description: "Redirect HTTP port 80 to HTTPS port 443"
+    type: http
+    ip: "*"
+    port: 80
+    redirect:
+      scheme: https
+      port: 443    # Optional, defaults to 443
+      code: 301    # Optional, defaults to 301
+
+  # HTTPS load balancer
+  - name: https-lb
+    enabled: true
+    override: true
+    description: "HTTPS load balancer"
+    type: http
+    ip: "*"
+    port: 443
+    backend:
+      servers:
+        - name: app1
+          address: 127.0.0.1:8080
+        - name: app2
+          address: 127.0.0.1:8081
+```
+
+**Redirect Options:**
+- `scheme`: Target scheme (`http` or `https`, default: `https`)
+- `port`: Target port (optional, defaults to 443 for HTTPS)
+- `code`: HTTP redirect code (optional, defaults to 301 for permanent redirect)
+
+**Note:** When using `redirect`, the `backend` configuration is ignored as the frontend only performs redirects.
 
 ## Development
 

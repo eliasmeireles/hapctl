@@ -4,6 +4,7 @@ users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
+    groups: docker
     ssh_authorized_keys:
       - ${SSH_PUBLIC_KEY}
 
@@ -11,63 +12,22 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - nginx
+  - apt-transport-https
+  - ca-certificates
   - curl
-  - wget
+  - gnupg
+  - lsb-release
   - net-tools
 
-write_files:
-  - path: /var/www/html/index.html
-    content: |
-      <!DOCTYPE html>
-      <html>
-      <head>
-          <title>Test App - Port 8080</title>
-          <style>
-              body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
-              .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-              h1 { color: #2c3e50; }
-              .info { background: #e8f4f8; padding: 15px; border-radius: 4px; margin: 20px 0; }
-              .success { color: #27ae60; font-weight: bold; }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <h1>Test Application</h1>
-              <div class="info">
-                  <p><strong>Status:</strong> <span class="success">Running</span></p>
-                  <p><strong>Port:</strong> 8080</p>
-                  <p><strong>Purpose:</strong> Backend service for HAProxy testing</p>
-              </div>
-              <p>This is a test application running on port 8080.</p>
-              <p>Configure HAProxy to proxy port 80 to 8080 using hapctl.</p>
-          </div>
-      </body>
-      </html>
-  - path: /etc/nginx/sites-available/test-app
-    content: |
-      server {
-          listen 8080;
-          server_name _;
-          root /var/www/html;
-          index index.html;
-
-          location / {
-              try_files $uri $uri/ =404;
-          }
-
-          location /health {
-              return 200 '{"status":"healthy","port":8080}';
-              add_header Content-Type application/json;
-          }
-      }
-
 runcmd:
-  - ln -s /etc/nginx/sites-available/test-app /etc/nginx/sites-enabled/test-app
-  - rm -f /etc/nginx/sites-enabled/default
-  - systemctl restart nginx
-  - systemctl enable nginx
-  - echo "Test app is running on port 8080"
-  - echo "Access it at: http://$(hostname -I | awk '{print $1}'):8080"
+  - mkdir -p /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker ubuntu
   - mkdir -p /home/ubuntu/hapctl
   - chown -R ubuntu:ubuntu /home/ubuntu/hapctl
+  - echo "Docker installed successfully"

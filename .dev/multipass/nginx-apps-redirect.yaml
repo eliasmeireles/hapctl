@@ -1,0 +1,28 @@
+binds:
+  # HTTP redirect (porta 80 -> 443)
+  - name: http-redirect
+    enabled: true
+    override: true
+    description: "Redirect HTTP port 80 to HTTPS port 443"
+    type: http
+    ip: "*"
+    port: 80
+    redirect:
+      scheme: http
+      port: 443
+      code: 301
+
+  # HTTPS load balancer (porta 443)
+  - name: nginx-apps-lb
+    enabled: true
+    override: true
+    description: "Load balancer for both nginx apps on HTTPS port"
+    type: http
+    ip: "*"
+    port: 443
+    backend:
+      servers:
+        - name: app1-backend
+          address: 127.0.0.1:8080
+        - name: app2-backend
+          address: 127.0.0.1:8081

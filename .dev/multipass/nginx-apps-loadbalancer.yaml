@@ -1,0 +1,15 @@
+binds:
+  # HTTP load balancer (porta 80)
+  - name: nginx-apps-lb
+    enabled: true
+    override: true
+    description: "Load balancer for both nginx apps"
+    type: http
+    ip: "*"
+    port: 80
+    backend:
+      servers:
+        - name: app1-backend
+          address: 127.0.0.1:8080
+        - name: app2-backend
+          address: 127.0.0.1:8081

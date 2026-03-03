@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test App 2 - Port 8081</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; }
+        .info { background: #fff3cd; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .success { color: #27ae60; font-weight: bold; }
+        .app-id { background: #e74c3c; color: white; padding: 10px; border-radius: 4px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-id">
+            <h2>Application 2</h2>
+        </div>
+        <h1>Test Application 2</h1>
+        <div class="info">
+            <p><strong>Status:</strong> <span class="success">Running</span></p>
+            <p><strong>Container:</strong> nginx-app2</p>
+            <p><strong>Port:</strong> 8081</p>
+            <p><strong>Purpose:</strong> Backend service for HAProxy testing</p>
+        </div>
+        <p>This is test application 2 running in Docker on port 8081.</p>
+        <p>Configure HAProxy to proxy port 80 to 127.0.0.1:8081 using hapctl.</p>
+    </div>
+</body>
+</html>
