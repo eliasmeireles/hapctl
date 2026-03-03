@@ -1,0 +1,12 @@
+binds:
+  - name: test-app
+    override: true
+    enabled: true
+    description: Test application proxy (port 80 -> 8080)
+    type: http
+    ip: "*"
+    port: 80
+    backend:
+      servers:
+        - name: nginx-backend
+          address: 127.0.0.1:8080

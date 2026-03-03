@@ -103,6 +103,25 @@ binds:
           address: 127.0.0.1:7777
 ```
 
+## Development
+
+### Testing Environment
+
+A complete development environment using Multipass is available in `.dev/multipass/`:
+
+```bash
+cd .dev/multipass
+./setup.sh
+```
+
+This creates a VM with:
+- Nginx running on port 8080 (test backend)
+- HAProxy installed and ready
+- hapctl pre-installed
+- Example configurations
+
+See [.dev/README.md](.dev/README.md) for detailed instructions.
+
 ## Architecture
 
 - `cmd/hapctl`: CLI entry point
