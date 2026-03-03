@@ -34,10 +34,17 @@ get_ssh_key() {
 create_vm() {
     echo ""
     echo "Creating VM: $VM_NAME"
-    
-    # Substitute SSH key in cloud-init
-    envsubst < "$SCRIPT_DIR/cloud-init.yaml" > /tmp/hapctl-cloud-init.yaml
-    
+
+    # Substitute SSH key in cloud-init using sed
+    sed "s|\${SSH_PUBLIC_KEY}|${SSH_PUBLIC_KEY}|g" "$SCRIPT_DIR/cloud-init.yaml" > /tmp/hapctl-cloud-init.yaml
+
+    # Validate the generated file
+    if ! grep -q "ssh_authorized_keys:" /tmp/hapctl-cloud-init.yaml; then
+        echo "❌ Failed to generate cloud-init file"
+        cat /tmp/hapctl-cloud-init.yaml
+        exit 1
+    fi
+
     multipass launch \
         --name "$VM_NAME" \
         --cpus 2 \
@@ -45,9 +52,9 @@ create_vm() {
         --disk 10G \
         --cloud-init /tmp/hapctl-cloud-init.yaml \
         22.04
-    
+
     rm /tmp/hapctl-cloud-init.yaml
-    
+
     echo "✅ VM created successfully"
 }
 
@@ -55,7 +62,7 @@ wait_for_vm() {
     echo ""
     echo "Waiting for VM to be ready..."
     sleep 10
-    
+
     for i in {1..30}; do
         if multipass exec "$VM_NAME" -- systemctl is-active nginx &> /dev/null; then
             echo "✅ VM is ready"
@@ -64,7 +71,7 @@ wait_for_vm() {
         echo "Waiting... ($i/30)"
         sleep 2
     done
-    
+
     echo "❌ VM did not become ready in time"
     exit 1
 }
@@ -72,42 +79,42 @@ wait_for_vm() {
 install_hapctl() {
     echo ""
     echo "Building and installing hapctl..."
-    
+
     cd "$PROJECT_ROOT"
     make build
-    
+
     VM_IP=$(multipass info "$VM_NAME" | grep IPv4 | awk '{print $2}')
-    
+
     echo "Copying hapctl binary to VM..."
     multipass transfer "$PROJECT_ROOT/bin/hapctl" "$VM_NAME:/tmp/hapctl"
-    
+
     multipass exec "$VM_NAME" -- sudo mv /tmp/hapctl /usr/local/bin/hapctl
     multipass exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/hapctl
-    
+
     echo "Installing HAProxy..."
     multipass exec "$VM_NAME" -- sudo /usr/local/bin/hapctl install
-    
+
     echo "✅ hapctl installed successfully"
 }
 
 setup_haproxy_config() {
     echo ""
     echo "Setting up HAProxy configuration..."
-    
+
     # Create hapctl config directory
     multipass exec "$VM_NAME" -- sudo mkdir -p /etc/hapctl
     multipass exec "$VM_NAME" -- sudo mkdir -p /etc/haproxy/hapctl/resources
-    
+
     # Copy example configs
     multipass transfer "$SCRIPT_DIR/test-bind.yaml" "$VM_NAME:/tmp/test-bind.yaml"
     multipass exec "$VM_NAME" -- sudo mv /tmp/test-bind.yaml /etc/haproxy/hapctl/resources/test-bind.yaml
-    
+
     echo "✅ Configuration files copied"
 }
 
 show_info() {
     VM_IP=$(multipass info "$VM_NAME" | grep IPv4 | awk '{print $2}')
-    
+
     echo ""
     echo "=========================================="
     echo "✅ Development environment is ready!"
@@ -140,7 +147,7 @@ show_info() {
 main() {
     check_multipass
     get_ssh_key
-    
+
     if multipass list | grep -q "$VM_NAME"; then
         echo ""
         echo "⚠️  VM '$VM_NAME' already exists"
@@ -154,7 +161,7 @@ main() {
             exit 0
         fi
     fi
-    
+
     create_vm
     wait_for_vm
     install_hapctl
