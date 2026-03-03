@@ -173,8 +173,12 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 	}
 
 	var configs strings.Builder
-	// Keywords that start a valid HAProxy configuration line in our generated files
-	validKeywords := []string{"frontend", "backend", "listen", "    ", "#", "bind", "mode", "server", "default_backend", "balance", "option", "redirect"}
+	// Keywords that start a valid HAProxy configuration line in our generated files.
+	// We only want lines that are either:
+	// 1. A section header (frontend, backend, listen)
+	// 2. A comment starting with #
+	// 3. An indented configuration line (starting with 4 spaces)
+	sectionHeaders := []string{"frontend ", "backend ", "listen "}
 
 	for _, file := range files {
 		content, err := os.ReadFile(file)
@@ -185,16 +189,30 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 
 		lines := strings.Split(string(content), "\n")
 		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
+			if strings.TrimSpace(line) == "" {
 				continue
 			}
 
 			isValid := false
-			for _, kw := range validKeywords {
-				if strings.HasPrefix(line, kw) {
+			// 1. Check for section headers (must be at the beginning of the line)
+			for _, sh := range sectionHeaders {
+				if strings.HasPrefix(line, sh) {
 					isValid = true
 					break
+				}
+			}
+
+			// 2. Check for comments
+			if !isValid && strings.HasPrefix(strings.TrimSpace(line), "#") {
+				isValid = true
+			}
+
+			// 3. Check for indented configuration lines (standard HAProxy style)
+			if !isValid && strings.HasPrefix(line, "    ") {
+				// Ensure it's not a variable assignment like "    var=val"
+				trimmed := strings.TrimSpace(line)
+				if !strings.Contains(trimmed, "=") || strings.Contains(trimmed, " ") {
+					isValid = true
 				}
 			}
 
