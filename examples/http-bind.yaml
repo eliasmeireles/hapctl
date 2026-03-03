@@ -1,0 +1,26 @@
+binds:
+  - name: web-api
+    override: true
+    enabled: true
+    description: Web API HTTP frontend
+    type: http
+    ip: "*"
+    port: 8080
+    backend:
+      servers:
+        - name: api-server1
+          address: 127.0.0.1:3000
+        - name: api-server2
+          address: 127.0.0.1:3001
+
+  - name: vault-ui
+    override: false
+    enabled: true
+    description: Vault UI
+    type: http
+    ip: "10.99.0.243"
+    port: 80
+    backend:
+      servers:
+        - name: vault
+          address: 127.0.0.1:31201

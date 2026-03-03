@@ -1,0 +1,15 @@
+sync:
+  resource-path: /etc/haproxy/hapctl/resources
+  interval: 5s
+  enabled: true
+
+monitoring:
+  enabled: true
+  interval: 10s
+  webhook:
+    url: http://localhost:8080/webhook
+    headers:
+      - name: Content-Type
+        value: application/json
+      - name: Authorization
+        value: Bearer your-api-key-here

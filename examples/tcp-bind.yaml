@@ -1,0 +1,26 @@
+binds:
+  - name: game-server
+    override: true
+    enabled: true
+    description: Game server TCP bind
+    type: tcp
+    ip: "*"
+    port: 7777
+    backend:
+      servers:
+        - name: server1
+          address: 127.0.0.1:7777
+        - name: server2
+          address: 127.0.0.1:7778
+
+  - name: mysql-proxy
+    override: false
+    enabled: true
+    description: MySQL proxy
+    type: tcp
+    ip: "10.99.0.243"
+    port: 3306
+    backend:
+      servers:
+        - name: mysql-primary
+          address: 127.0.0.1:31306
