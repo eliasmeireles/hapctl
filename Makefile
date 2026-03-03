@@ -59,3 +59,9 @@ validate-example:
 apply-example:
 	@echo "Applying example TCP bind..."
 	@sudo $(BUILD_DIR)/$(BINARY_NAME) apply -f examples/tcp-bind.yaml
+
+build-webhook-test:
+	@echo "Building webhook-test..."
+	@mkdir -p $(BUILD_DIR)
+	cd .dev/webhook-test && $(GO) build $(GOFLAGS) $(LDFLAGS) -o ../../$(BUILD_DIR)/webhook-test .
+	@echo "✅ webhook-test built successfully"
