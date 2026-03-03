@@ -26,7 +26,10 @@ type Logger struct {
 	debugLogger *log.Logger
 }
 
-var defaultLogger *Logger
+var (
+	defaultLogger *Logger
+	debugEnabled  bool
+)
 
 func Init(logPath string) error {
 	if logPath == "" {
@@ -35,6 +38,8 @@ func Init(logPath string) error {
 
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
+		// Try to set proper permissions if directory was created
+		os.Chmod(logDir, 0755)
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			log.Printf("[WARNING] Failed to create log directory %s: %v. Could not determine home directory: %v", logDir, err, homeErr)
@@ -89,11 +94,18 @@ func Error(format string, v ...interface{}) {
 }
 
 func Debug(format string, v ...interface{}) {
+	if !debugEnabled {
+		return
+	}
 	if defaultLogger == nil {
 		log.Printf("[DEBUG] "+format, v...)
 		return
 	}
 	defaultLogger.debugLogger.Printf(format, v...)
+}
+
+func SetDebug(enabled bool) {
+	debugEnabled = enabled
 }
 
 func Fatal(format string, v ...interface{}) {

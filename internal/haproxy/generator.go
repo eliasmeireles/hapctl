@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/eliasmeireles/hapctl/internal/logger"
 	"github.com/eliasmeireles/hapctl/internal/models"
 )
 
@@ -14,11 +15,13 @@ const (
 	DefaultServicesDir      = "services.d"
 	HTTPServicesDir         = "http"
 	TCPServicesDir          = "tcp"
+	NamePrefix              = "hapctl-"
 )
 
 type Generator struct {
-	configDir   string
-	servicesDir string
+	configDir     string
+	servicesDir   string
+	usingFallback bool
 }
 
 func NewGenerator(configDir string) *Generator {
@@ -26,10 +29,51 @@ func NewGenerator(configDir string) *Generator {
 		configDir = DefaultHAProxyConfigDir
 	}
 
-	return &Generator{
-		configDir:   configDir,
-		servicesDir: filepath.Join(configDir, DefaultServicesDir),
+	g := &Generator{
+		configDir:     configDir,
+		servicesDir:   filepath.Join(configDir, DefaultServicesDir),
+		usingFallback: false,
 	}
+
+	if err := g.ensureDirectories(); err != nil {
+		logger.Info("[WARNING] Cannot write to %s: %v", configDir, err)
+		logger.Info("[WARNING] Falling back to $HOME/.hapctl due to permission denied")
+		g.useFallbackDir()
+	}
+
+	return g
+}
+
+func (g *Generator) useFallbackDir() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("Failed to get home directory: %v", err)
+		return
+	}
+
+	fallbackDir := filepath.Join(homeDir, ".hapctl", "haproxy")
+	g.configDir = fallbackDir
+	g.servicesDir = filepath.Join(fallbackDir, DefaultServicesDir)
+	g.usingFallback = true
+
+	if err := g.ensureDirectories(); err != nil {
+		logger.Error("Failed to create fallback directory: %v", err)
+	}
+}
+
+func (g *Generator) ensureDirectories() error {
+	httpDir := filepath.Join(g.servicesDir, HTTPServicesDir)
+	tcpDir := filepath.Join(g.servicesDir, TCPServicesDir)
+
+	if err := os.MkdirAll(httpDir, 0755); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(tcpDir, 0755); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *Generator) GenerateBindConfig(bind *models.Bind) (string, error) {
@@ -49,21 +93,25 @@ func (g *Generator) GenerateBindConfig(bind *models.Bind) (string, error) {
 func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 	var builder strings.Builder
 
+	frontendName := NamePrefix + bind.Name
+	backendName := NamePrefix + bind.Name + "-backend"
+
 	builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-	builder.WriteString(fmt.Sprintf("frontend %s\n", bind.Name))
-	
+	builder.WriteString(fmt.Sprintf("frontend %s\n", frontendName))
+
 	bindAddr := g.formatBindAddress(bind)
 	builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
 	builder.WriteString("    mode http\n")
-	builder.WriteString(fmt.Sprintf("    default_backend %s_backend\n\n", bind.Name))
+	builder.WriteString(fmt.Sprintf("    default_backend %s\n\n", backendName))
 
-	builder.WriteString(fmt.Sprintf("backend %s_backend\n", bind.Name))
+	builder.WriteString(fmt.Sprintf("backend %s\n", backendName))
 	builder.WriteString("    mode http\n")
 	builder.WriteString("    balance roundrobin\n")
 
 	if len(bind.Backend.Servers) > 0 {
 		for _, server := range bind.Backend.Servers {
-			builder.WriteString(fmt.Sprintf("    server %s %s check\n", server.Name, server.Address))
+			serverName := NamePrefix + server.Name
+			builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
 		}
 	}
 
@@ -73,9 +121,11 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 func (g *Generator) generateTCPConfig(bind *models.Bind) string {
 	var builder strings.Builder
 
+	listenName := NamePrefix + bind.Name
+
 	builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-	builder.WriteString(fmt.Sprintf("listen %s\n", bind.Name))
-	
+	builder.WriteString(fmt.Sprintf("listen %s\n", listenName))
+
 	bindAddr := g.formatBindAddress(bind)
 	builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
 	builder.WriteString("    mode tcp\n")
@@ -83,7 +133,8 @@ func (g *Generator) generateTCPConfig(bind *models.Bind) string {
 	if len(bind.Backend.Servers) > 0 {
 		builder.WriteString("    balance roundrobin\n")
 		for _, server := range bind.Backend.Servers {
-			builder.WriteString(fmt.Sprintf("    server %s %s check\n", server.Name, server.Address))
+			serverName := NamePrefix + server.Name
+			builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
 		}
 	}
 
@@ -115,10 +166,15 @@ func (g *Generator) WriteBindConfig(bind *models.Bind) error {
 		return fmt.Errorf("failed to create service directory: %w", err)
 	}
 
-	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", bind.Name))
-	
+	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", NamePrefix+bind.Name))
+
 	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if g.usingFallback {
+		logger.Info("[WARNING] Config written to fallback location: %s", configPath)
+		logger.Info("[WARNING] You need to manually copy configs to %s or run with sudo", DefaultHAProxyConfigDir)
 	}
 
 	return nil
@@ -132,8 +188,8 @@ func (g *Generator) RemoveBindConfig(bind *models.Bind) error {
 		serviceDir = filepath.Join(g.servicesDir, TCPServicesDir)
 	}
 
-	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", bind.Name))
-	
+	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", NamePrefix+bind.Name))
+
 	if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove config file: %w", err)
 	}
@@ -149,7 +205,7 @@ func (g *Generator) ConfigExists(bind *models.Bind) bool {
 		serviceDir = filepath.Join(g.servicesDir, TCPServicesDir)
 	}
 
-	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", bind.Name))
+	configPath := filepath.Join(serviceDir, fmt.Sprintf("%s.cfg", NamePrefix+bind.Name))
 	_, err := os.Stat(configPath)
 	return err == nil
 }

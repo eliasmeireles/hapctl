@@ -64,13 +64,38 @@ hapctl apply --file /path/to/bind-config.yaml
 hapctl validate --file /path/to/bind-config.yaml
 ```
 
+### Systemd Service Management
+
+```bash
+# Install systemd service (with default config)
+sudo hapctl service install
+
+# Install with custom config path
+sudo hapctl service install --config /path/to/config.yaml
+
+# Install with custom service file
+sudo hapctl service install --service-file /path/to/custom.service
+
+# Check service status
+sudo hapctl service status
+
+# Uninstall service
+sudo hapctl service uninstall
+
+# After installation, manage with systemctl
+sudo systemctl start hapctl-agent
+sudo systemctl stop hapctl-agent
+sudo systemctl restart hapctl-agent
+sudo journalctl -u hapctl-agent -f
+```
+
 ## Configuration
 
 ### CLI Configuration (`/etc/hapctl/config.yaml`)
 
 ```yaml
 sync:
-  resource-path: /etc/haproxy/hapctl/resources
+  resource-path: /etc/hapctl/resources
   interval: 5s
   enabled: true
 

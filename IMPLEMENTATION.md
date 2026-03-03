@@ -104,7 +104,7 @@ hapctl/
 **CLI Config** (`/etc/hapctl/config.yaml`):
 ```yaml
 sync:
-  resource-path: /etc/haproxy/hapctl/resources
+  resource-path: /etc/hapctl/resources
   interval: 5s
   enabled: true
 

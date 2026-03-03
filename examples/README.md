@@ -40,7 +40,7 @@ sudo hapctl agent --config examples/config.yaml
 
 When running the agent, create the resource directory:
 ```bash
-sudo mkdir -p /etc/haproxy/hapctl/resources
+sudo mkdir -p /etc/hapctl/resources
 ```
 
 Place your bind configuration files in this directory, and the agent will automatically detect and apply them.

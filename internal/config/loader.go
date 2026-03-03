@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DefaultResourcePath      = "/etc/haproxy/hapctl/resources"
+	DefaultResourcePath      = "/etc/hapctl/resources"
 	DefaultSyncInterval      = 5 * time.Second
 	DefaultMonitorInterval   = 5 * time.Second
 	DefaultSyncEnabled       = true

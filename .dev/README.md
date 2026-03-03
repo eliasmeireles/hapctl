@@ -34,10 +34,10 @@ The VM includes:
 - **Nginx Test App** (port 8080)
   - Simple HTML page showing it's running
   - Health check endpoint at `/health`
-  
+
 - **HAProxy** (managed by hapctl)
   - Will proxy port 80 → 8080 when configured
-  
+
 - **hapctl** (pre-installed)
   - Ready to manage HAProxy configurations
 
@@ -59,7 +59,7 @@ curl http://localhost:8080/health
 #### 3. Apply HAProxy configuration
 
 ```bash
-sudo hapctl apply -f /etc/haproxy/hapctl/resources/test-bind.yaml
+sudo hapctl apply -f /etc/hapctl/resources/test-bind.yaml
 ```
 
 #### 4. Test HAProxy proxy
@@ -74,14 +74,14 @@ You should see the same content as port 8080, but now proxied through HAProxy!
 
 ```bash
 # Copy config to expected location
-sudo cp /etc/haproxy/hapctl/resources/config.yaml /etc/hapctl/config.yaml
+sudo cp /etc/hapctl/resources/config.yaml /etc/hapctl/config.yaml
 
 # Start agent
 sudo hapctl agent --config /etc/hapctl/config.yaml
 ```
 
 The agent will:
-- Monitor `/etc/haproxy/hapctl/resources/` for YAML changes
+- Monitor `/etc/hapctl/resources/` for YAML changes
 - Automatically apply configuration changes
 - Perform health checks every 10 seconds
 
@@ -90,7 +90,7 @@ The agent will:
 1. Create a new bind configuration:
 
 ```bash
-sudo nano /etc/haproxy/hapctl/resources/another-service.yaml
+sudo nano /etc/hapctl/resources/another-service.yaml
 ```
 
 2. Add content:
@@ -112,7 +112,7 @@ binds:
 3. If agent is running, it will auto-apply. Otherwise:
 
 ```bash
-sudo hapctl apply -f /etc/haproxy/hapctl/resources/another-service.yaml
+sudo hapctl apply -f /etc/hapctl/resources/another-service.yaml
 ```
 
 ### Useful Commands

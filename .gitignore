@@ -43,3 +43,8 @@ temp/
 
 # Planning documents
 AGENT.md
+
+# Build and temporary artifacts
+.out/
+.volume/
+.volumes/

@@ -35,7 +35,7 @@ func (i *Installer) Install() error {
 	}
 
 	logger.Info("Detecting package manager...")
-	
+
 	if i.commandExists("apt-get") {
 		return i.installWithApt()
 	} else if i.commandExists("yum") {
@@ -49,7 +49,7 @@ func (i *Installer) Install() error {
 
 func (i *Installer) installWithApt() error {
 	logger.Info("Installing HAProxy using apt...")
-	
+
 	logger.Info("Updating package list...")
 	if err := i.runCommand("apt-get", "update"); err != nil {
 		return fmt.Errorf("failed to update package list: %w", err)
@@ -65,13 +65,18 @@ func (i *Installer) installWithApt() error {
 		logger.Error("Failed to enable haproxy service: %v", err)
 	}
 
+	logger.Info("Configuring HAProxy to include hapctl configs...")
+	if err := i.ConfigureHAProxy(); err != nil {
+		logger.Error("Failed to configure HAProxy: %v", err)
+	}
+
 	logger.Info("HAProxy installed successfully")
 	return nil
 }
 
 func (i *Installer) installWithYum() error {
 	logger.Info("Installing HAProxy using yum...")
-	
+
 	if err := i.runCommand("yum", "install", "-y", "haproxy"); err != nil {
 		return fmt.Errorf("failed to install haproxy: %w", err)
 	}
@@ -87,7 +92,7 @@ func (i *Installer) installWithYum() error {
 
 func (i *Installer) installWithDnf() error {
 	logger.Info("Installing HAProxy using dnf...")
-	
+
 	if err := i.runCommand("dnf", "install", "-y", "haproxy"); err != nil {
 		return fmt.Errorf("failed to install haproxy: %w", err)
 	}
@@ -112,5 +117,29 @@ func (i *Installer) runCommand(name string, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, string(output))
 	}
+	return nil
+}
+
+func (i *Installer) ConfigureHAProxy() error {
+	configPath := "/etc/haproxy/haproxy.cfg"
+
+	// Check if already configured
+	checkCmd := exec.Command("grep", "-q", "services.d", configPath)
+	if checkCmd.Run() == nil {
+		logger.Info("HAProxy already configured to include services.d")
+		return nil
+	}
+
+	// Append configuration to include services.d configs
+	includeConfig := "\n# hapctl managed configurations\n"
+	includeConfig += "# Include HTTP services\n"
+	includeConfig += "# Include TCP services\n"
+
+	appendCmd := exec.Command("bash", "-c", fmt.Sprintf("echo '%s' >> %s", includeConfig, configPath))
+	if err := appendCmd.Run(); err != nil {
+		return fmt.Errorf("failed to append config: %w", err)
+	}
+
+	logger.Info("HAProxy configuration updated")
 	return nil
 }
