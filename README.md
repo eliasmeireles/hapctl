@@ -94,6 +94,3 @@ binds:
 - `internal/monitor`: Health monitoring and webhook notifications
 - `internal/logger`: Logging system with rotation
 
-## License
-
-MIT
