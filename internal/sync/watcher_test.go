@@ -21,7 +21,9 @@ func (m *mockMonitor) ClearBinds()                    {} // Mock implementation
 func TestWatcherConcurrency(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "hapctl-watcher-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	// Create a dummy resource file
 	resourceFile := filepath.Join(tmpDir, "test.yaml")

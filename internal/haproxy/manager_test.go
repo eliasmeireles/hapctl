@@ -12,7 +12,9 @@ import (
 func TestReadServiceConfigsFiltering(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "hapctl-manager-test-*")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	m := NewManager(tmpDir)
 
