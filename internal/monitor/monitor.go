@@ -115,7 +115,7 @@ func (m *Monitor) checkBind(bind *models.Bind) models.BindStatus {
 		status.Error = err.Error()
 		return status
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	return status
 }
@@ -149,7 +149,7 @@ func (m *Monitor) sendWebhook(report *models.MonitoringReport) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)

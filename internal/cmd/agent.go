@@ -57,7 +57,9 @@ func ensureLogDirectory() error {
 	}
 
 	// Ensure permissions are correct
-	os.Chmod(logDir, 0755)
+	if err := os.Chmod(logDir, 0755); err != nil {
+		logger.Warn("Failed to set permissions on log directory: %v", err)
+	}
 	return nil
 }
 
@@ -72,7 +74,9 @@ func ensureResourceDirectory(resourcePath string) error {
 	}
 
 	// Ensure permissions are correct
-	os.Chmod(resourcePath, 0755)
+	if err := os.Chmod(resourcePath, 0755); err != nil {
+		logger.Warn("Failed to set permissions on resource directory: %v", err)
+	}
 	logger.Info("Resource directory ready: %s", resourcePath)
 	return nil
 }

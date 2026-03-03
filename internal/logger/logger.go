@@ -40,7 +40,7 @@ func Init(logPath string) error {
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		// Try to set proper permissions if directory was created
-		os.Chmod(logDir, 0755)
+		_ = os.Chmod(logDir, 0755)
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			log.Printf("[WARNING] Failed to create log directory %s: %v. Could not determine home directory: %v", logDir, err, homeErr)

@@ -79,11 +79,12 @@ func (g *Generator) ensureDirectories() error {
 func (g *Generator) GenerateBindConfig(bind *models.Bind) (string, error) {
 	var builder strings.Builder
 
-	if bind.Type == "http" {
+	switch bind.Type {
+	case "http":
 		builder.WriteString(g.generateHTTPConfig(bind))
-	} else if bind.Type == "tcp" {
+	case "tcp":
 		builder.WriteString(g.generateTCPConfig(bind))
-	} else {
+	default:
 		return "", fmt.Errorf("unsupported bind type: %s", bind.Type)
 	}
 

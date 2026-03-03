@@ -23,7 +23,7 @@ var (
 func init() {
 	rootCmd.AddCommand(validateCmd)
 	validateCmd.Flags().StringVarP(&validateFile, "file", "f", "", "bind configuration file (required)")
-	validateCmd.MarkFlagRequired("file")
+	_ = validateCmd.MarkFlagRequired("file")
 }
 
 func runValidate(cmd *cobra.Command, args []string) {

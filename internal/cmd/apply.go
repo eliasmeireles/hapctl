@@ -21,7 +21,7 @@ var (
 func init() {
 	rootCmd.AddCommand(applyCmd)
 	applyCmd.Flags().StringVarP(&applyFile, "file", "f", "", "bind configuration file (required)")
-	applyCmd.MarkFlagRequired("file")
+	_ = applyCmd.MarkFlagRequired("file")
 }
 
 func runApply(cmd *cobra.Command, args []string) {

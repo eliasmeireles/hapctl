@@ -75,7 +75,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			logger.Info("Stopping sync watcher")
-			w.watcher.Close()
+			_ = w.watcher.Close()
 			return nil
 
 		case event, ok := <-w.watcher.Events:
@@ -356,11 +356,11 @@ func (w *Watcher) calculateResourcesHash() (string, error) {
 		}
 
 		if _, err := io.Copy(hasher, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			logger.Error("Failed to hash file: %s: %v", file, err)
 			continue
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil

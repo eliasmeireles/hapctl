@@ -132,7 +132,9 @@ func (m *Manager) regenerateMainConfig() error {
 	}
 
 	// Backup current config
-	os.WriteFile(backupPath, baseConfig, 0644)
+	if err := os.WriteFile(backupPath, baseConfig, 0644); err != nil {
+		logger.Warn("Failed to backup config: %v", err)
+	}
 
 	// Write new config
 	if err := os.WriteFile(baseConfigPath, []byte(newConfig.String()), 0644); err != nil {
