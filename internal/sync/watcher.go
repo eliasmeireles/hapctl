@@ -217,19 +217,33 @@ func (w *Watcher) initialSync() error {
 		return err
 	}
 
+	// Clear monitor binds before initial sync
+	if w.monitor != nil {
+		w.monitor.ClearBinds()
+	}
+
+	// Apply all configs with single reload
+	if err := w.manager.ApplyConfig(resources); err != nil {
+		logger.Error("Failed to apply configs: %v", err)
+	}
+
+	// Register binds for monitoring
 	for path, resource := range resources {
 		for i := range resource.Binds {
 			bind := &resource.Binds[i]
-			if err := w.manager.ApplyBind(bind); err != nil {
-				logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
-				continue
-			}
-
 			if w.monitor != nil && bind.Enabled {
 				w.monitor.RegisterBind(bind)
 			}
 		}
 		w.resources[path] = resource
+	}
+
+	// Calculate initial hash
+	newHash, err := w.calculateResourcesHash()
+	if err != nil {
+		logger.Error("Failed to calculate initial hash: %v", err)
+	} else {
+		w.lastHash = newHash
 	}
 
 	logger.Info("Initial sync completed, loaded %d resources", len(resources))
@@ -265,15 +279,15 @@ func (w *Watcher) periodicSync() error {
 		}
 	}
 
-	// Apply all resources (hash already changed, so we need to sync)
+	// Apply all configs with single reload
+	if err := w.manager.ApplyConfig(resources); err != nil {
+		logger.Error("Failed to apply configs: %v", err)
+	}
+
+	// Register binds for monitoring
 	for path, resource := range resources {
 		for i := range resource.Binds {
 			bind := &resource.Binds[i]
-			if err := w.manager.ApplyBind(bind); err != nil {
-				logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
-				continue
-			}
-
 			if w.monitor != nil && bind.Enabled {
 				w.monitor.RegisterBind(bind)
 			}
@@ -292,11 +306,30 @@ func (w *Watcher) periodicSync() error {
 }
 
 func (w *Watcher) forcedResync() error {
-	logger.Info("Performing forced full resync")
+	logger.Debug("Checking if forced resync is needed")
+
+	// Calculate current hash
+	currentHash, err := w.calculateResourcesHash()
+	if err != nil {
+		logger.Error("Failed to calculate hash: %v", err)
+	}
+
+	// If hash hasn't changed, skip forced resync entirely
+	if currentHash != "" && currentHash == w.lastHash {
+		logger.Debug("No changes detected (hash match), skipping forced resync")
+		return nil
+	}
+
+	logger.Info("Hash changed, performing forced full resync")
 
 	resources, err := config.LoadBindResourcesFromDir(w.resourcePath)
 	if err != nil {
 		return err
+	}
+
+	// Clear monitor binds to avoid duplicates
+	if w.monitor != nil {
+		w.monitor.ClearBinds()
 	}
 
 	// Remove binds for files that no longer exist
@@ -319,6 +352,7 @@ func (w *Watcher) forcedResync() error {
 		logger.Error("Failed to cleanup orphaned configs: %v", err)
 	}
 
+	w.lastHash = currentHash
 	logger.Info("Forced resync completed, processed %d resources", len(resources))
 	return nil
 }

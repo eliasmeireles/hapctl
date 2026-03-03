@@ -23,6 +23,8 @@ build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/hapctl
+	@cp $(BUILD_DIR)/$(BINARY_NAME) .dev/multipass/.volumes/
+	@cp ./.dev/multipass/instance-binary-update.sh .dev/multipass/.volumes/
 
 clean:
 	@echo "Cleaning..."

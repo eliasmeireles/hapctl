@@ -22,9 +22,16 @@ func NewManager(configDir string) *Manager {
 }
 
 func (m *Manager) ApplyBind(bind *models.Bind) error {
+	if err := m.ApplyBindWithoutReload(bind); err != nil {
+		return err
+	}
+	return m.ReloadHAProxy()
+}
+
+func (m *Manager) ApplyBindWithoutReload(bind *models.Bind) error {
 	if !bind.Enabled {
 		logger.Info("Bind %s is disabled, removing config if exists", bind.Name)
-		return m.RemoveBind(bind)
+		return m.RemoveBindWithoutReload(bind)
 	}
 
 	exists := m.generator.ConfigExists(bind)
@@ -53,15 +60,18 @@ func (m *Manager) ApplyBind(bind *models.Bind) error {
 		return fmt.Errorf("invalid HAProxy config: %w", err)
 	}
 
-	if err := m.ReloadHAProxy(); err != nil {
-		return fmt.Errorf("failed to reload HAProxy: %w", err)
-	}
-
 	logger.Info("✓ Successfully applied bind configuration for %s", bind.Name)
 	return nil
 }
 
 func (m *Manager) RemoveBind(bind *models.Bind) error {
+	if err := m.RemoveBindWithoutReload(bind); err != nil {
+		return err
+	}
+	return m.ReloadHAProxy()
+}
+
+func (m *Manager) RemoveBindWithoutReload(bind *models.Bind) error {
 	if !m.generator.ConfigExists(bind) {
 		logger.Debug("Bind %s config does not exist, nothing to remove", bind.Name)
 		return nil
@@ -72,10 +82,6 @@ func (m *Manager) RemoveBind(bind *models.Bind) error {
 
 	if err := m.generator.RemoveBindConfig(bind); err != nil {
 		return fmt.Errorf("failed to remove bind config: %w", err)
-	}
-
-	if err := m.ReloadHAProxy(); err != nil {
-		return fmt.Errorf("failed to reload HAProxy: %w", err)
 	}
 
 	logger.Info("✓ Successfully removed bind configuration for %s", bind.Name)
@@ -190,11 +196,24 @@ func (m *Manager) ReloadHAProxy() error {
 func (m *Manager) ApplyBindResource(resource *models.BindResource) error {
 	for i := range resource.Binds {
 		bind := &resource.Binds[i]
-		if err := m.ApplyBind(bind); err != nil {
+		if err := m.ApplyBindWithoutReload(bind); err != nil {
 			return fmt.Errorf("failed to apply bind %s: %w", bind.Name, err)
 		}
 	}
-	return nil
+	return m.ReloadHAProxy()
+}
+
+func (m *Manager) ApplyConfig(resources map[string]*models.BindResource) error {
+	for path, resource := range resources {
+		for i := range resource.Binds {
+			bind := &resource.Binds[i]
+			if err := m.ApplyBindWithoutReload(bind); err != nil {
+				logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
+				continue
+			}
+		}
+	}
+	return m.ReloadHAProxy()
 }
 
 func (m *Manager) GenerateBindConfig(bind *models.Bind) (string, error) {

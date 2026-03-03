@@ -425,6 +425,7 @@ import (
 )
 
 var (
+        Version = "dev"
         cfgFile string
         rootCmd = &amp;cobra.Command{
                 Use:   "hapctl",
@@ -432,7 +433,7 @@ var (
                 Long: `hapctl is a CLI and agent tool for managing HAProxy configurations dynamically.
 It monitors YAML configuration files and automatically applies changes to HAProxy,
 with built-in health monitoring and webhook notifications.`,
-                Version: "1.0.0",
+                Version: Version,
         }
 )
 
@@ -1273,9 +1274,16 @@ func NewManager(configDir string) *Manager <span class="cov0" title="0">{
 }</span>
 
 func (m *Manager) ApplyBind(bind *models.Bind) error <span class="cov0" title="0">{
+        if err := m.ApplyBindWithoutReload(bind); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">return m.ReloadHAProxy()</span>
+}
+
+func (m *Manager) ApplyBindWithoutReload(bind *models.Bind) error <span class="cov0" title="0">{
         if !bind.Enabled </span><span class="cov0" title="0">{
                 logger.Info("Bind %s is disabled, removing config if exists", bind.Name)
-                return m.RemoveBind(bind)
+                return m.RemoveBindWithoutReload(bind)
         }</span>
 
         <span class="cov0" title="0">exists := m.generator.ConfigExists(bind)
@@ -1304,15 +1312,18 @@ func (m *Manager) ApplyBind(bind *models.Bind) error <span class="cov0" title="0
                 <span class="cov0" title="0">return fmt.Errorf("invalid HAProxy config: %w", err)</span>
         }
 
-        <span class="cov0" title="0">if err := m.ReloadHAProxy(); err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to reload HAProxy: %w", err)
-        }</span>
-
         <span class="cov0" title="0">logger.Info("✓ Successfully applied bind configuration for %s", bind.Name)
         return nil</span>
 }
 
 func (m *Manager) RemoveBind(bind *models.Bind) error <span class="cov0" title="0">{
+        if err := m.RemoveBindWithoutReload(bind); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">return m.ReloadHAProxy()</span>
+}
+
+func (m *Manager) RemoveBindWithoutReload(bind *models.Bind) error <span class="cov0" title="0">{
         if !m.generator.ConfigExists(bind) </span><span class="cov0" title="0">{
                 logger.Debug("Bind %s config does not exist, nothing to remove", bind.Name)
                 return nil
@@ -1323,10 +1334,6 @@ func (m *Manager) RemoveBind(bind *models.Bind) error <span class="cov0" title="
 
         if err := m.generator.RemoveBindConfig(bind); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to remove bind config: %w", err)
-        }</span>
-
-        <span class="cov0" title="0">if err := m.ReloadHAProxy(); err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to reload HAProxy: %w", err)
         }</span>
 
         <span class="cov0" title="0">logger.Info("✓ Successfully removed bind configuration for %s", bind.Name)
@@ -1441,11 +1448,24 @@ func (m *Manager) ReloadHAProxy() error <span class="cov0" title="0">{
 func (m *Manager) ApplyBindResource(resource *models.BindResource) error <span class="cov0" title="0">{
         for i := range resource.Binds </span><span class="cov0" title="0">{
                 bind := &amp;resource.Binds[i]
-                if err := m.ApplyBind(bind); err != nil </span><span class="cov0" title="0">{
+                if err := m.ApplyBindWithoutReload(bind); err != nil </span><span class="cov0" title="0">{
                         return fmt.Errorf("failed to apply bind %s: %w", bind.Name, err)
                 }</span>
         }
-        <span class="cov0" title="0">return nil</span>
+        <span class="cov0" title="0">return m.ReloadHAProxy()</span>
+}
+
+func (m *Manager) ApplyConfig(resources map[string]*models.BindResource) error <span class="cov0" title="0">{
+        for path, resource := range resources </span><span class="cov0" title="0">{
+                for i := range resource.Binds </span><span class="cov0" title="0">{
+                        bind := &amp;resource.Binds[i]
+                        if err := m.ApplyBindWithoutReload(bind); err != nil </span><span class="cov0" title="0">{
+                                logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
+                                continue</span>
+                        }
+                }
+        }
+        <span class="cov0" title="0">return m.ReloadHAProxy()</span>
 }
 
 func (m *Manager) GenerateBindConfig(bind *models.Bind) (string, error) <span class="cov0" title="0">{
@@ -1703,31 +1723,44 @@ import (
 type Monitor struct {
         interval time.Duration
         webhook  *models.WebhookConfig
-        binds    []*models.Bind
+        binds    []models.Bind
 }
 
 func NewMonitor(cfg *models.MonitoringConfig) *Monitor <span class="cov0" title="0">{
         return &amp;Monitor{
                 interval: cfg.Interval,
                 webhook:  cfg.Webhook,
-                binds:    make([]*models.Bind, 0),
+                binds:    make([]models.Bind, 0),
         }
 }</span>
 
 func (m *Monitor) RegisterBind(bind *models.Bind) <span class="cov0" title="0">{
-        m.binds = append(m.binds, bind)
-        logger.Debug("Registered bind for monitoring: %s", bind.Name)
-}</span>
+        // Check if bind already exists to avoid duplicates
+        for i := range m.binds </span><span class="cov0" title="0">{
+                if m.binds[i].Name == bind.Name &amp;&amp; m.binds[i].Port == bind.Port &amp;&amp; m.binds[i].IP == bind.IP </span><span class="cov0" title="0">{
+                        logger.Debug("Bind %s:%d already registered, skipping", bind.Name, bind.Port)
+                        return
+                }</span>
+        }
+        // Store a copy of the bind, not the pointer
+        <span class="cov0" title="0">m.binds = append(m.binds, *bind)
+        logger.Debug("Registered bind for monitoring: %s:%d", bind.Name, bind.Port)</span>
+}
 
 func (m *Monitor) UnregisterBind(bindName string) <span class="cov0" title="0">{
-        for i, bind := range m.binds </span><span class="cov0" title="0">{
-                if bind.Name == bindName </span><span class="cov0" title="0">{
+        for i := range m.binds </span><span class="cov0" title="0">{
+                if m.binds[i].Name == bindName </span><span class="cov0" title="0">{
                         m.binds = append(m.binds[:i], m.binds[i+1:]...)
                         logger.Debug("Unregistered bind from monitoring: %s", bindName)
                         return
                 }</span>
         }
 }
+
+func (m *Monitor) ClearBinds() <span class="cov0" title="0">{
+        m.binds = make([]models.Bind, 0)
+        logger.Debug("Cleared all registered binds")
+}</span>
 
 func (m *Monitor) Start(ctx context.Context) error <span class="cov0" title="0">{
         logger.Info("Starting monitoring service with interval: %s", m.interval)
@@ -1760,16 +1793,16 @@ func (m *Monitor) checkBinds() <span class="cov0" title="0">{
                 Binds:     make([]models.BindStatus, 0, len(m.binds)),
         }
 
-        for _, bind := range m.binds </span><span class="cov0" title="0">{
-                if !bind.Enabled </span><span class="cov0" title="0">{
+        for i := range m.binds </span><span class="cov0" title="0">{
+                if !m.binds[i].Enabled </span><span class="cov0" title="0">{
                         continue</span>
                 }
 
-                <span class="cov0" title="0">status := m.checkBind(bind)
+                <span class="cov0" title="0">status := m.checkBind(&amp;m.binds[i])
                 report.Binds = append(report.Binds, status)
 
                 if status.Status != "healthy" </span><span class="cov0" title="0">{
-                        logger.Error("Bind %s is unhealthy: %s", bind.Name, status.Error)
+                        logger.Error("Bind %s is unhealthy: %s", m.binds[i].Name, status.Error)
                 }</span>
         }
 
@@ -2288,6 +2321,7 @@ type Watcher struct {
 type Monitor interface {
         RegisterBind(bind *models.Bind)
         UnregisterBind(bindName string)
+        ClearBinds()
 }
 
 func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager, mon Monitor) (*Watcher, error) <span class="cov0" title="0">{
@@ -2472,154 +2506,188 @@ func (w *Watcher) initialSync() error <span class="cov0" title="0">{
                 return err
         }</span>
 
-        <span class="cov0" title="0">for path, resource := range resources </span><span class="cov0" title="0">{
-                for i := range resource.Binds </span><span class="cov0" title="0">{
-                        bind := &amp;resource.Binds[i]
-                        if err := w.manager.ApplyBind(bind); err != nil </span><span class="cov0" title="0">{
-                                logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
-                                continue</span>
-                        }
+        // Clear monitor binds before initial sync
+        <span class="cov0" title="0">if w.monitor != nil </span><span class="cov0" title="0">{
+                w.monitor.ClearBinds()
+        }</span>
 
-                        <span class="cov0" title="0">if w.monitor != nil &amp;&amp; bind.Enabled </span><span class="cov0" title="0">{
-                                w.monitor.RegisterBind(bind)
-                        }</span>
-                }
-                <span class="cov0" title="0">w.resources[path] = resource</span>
+        <span class="cov0" title="0">// Apply all configs with single reloa</span><span class="cov0" title="0">d
+        if err := w.manager.ApplyConfig</span><span class="cov0" title="0">(resources); err != nil {
+                logger.Error("Failed to apply configs: %v", err)
+        }
+</span>
+        // Register</span> binds for monitoring
+        for path, resource := range resources {
+                for i := range resource.Binds {
+                        <span class="cov0" title="0">bind := &amp;resource.Binds[i]
+</span>                        if w.monitor != nil &amp;&amp; bind.Enabled {
+                                </span>w.monitor.RegisterBind(bind)
+                        }
+                <span class="cov0" title="0">}
+</span>                w.resources[path] = resource
         }
 
-        <span class="cov0" title="0">logger.Info("Initial sync completed, loaded %d resources", len(resources))
-        return nil</span>
+        <span class="cov0" title="0">// Calculate initial hash
+        newHash, err :</span><span class="cov0" title="0">= w.calculateResourcesHash()
+        if err != nil {
+                </span>logge<span class="cov0" title="0">r.Error("Failed to calculate initial hash: %v", err)
+        } else {
+                </span>w.lastHash = newHash
+        }
+
+        logger.Inf</span>o("Initial sync completed, loaded %d resources", len(resources))
+        return nil
 }
 
-func (w *Watcher) periodicSync() error <span class="cov0" title="0">{
+func (w *Watcher) periodicSync() error {
         logger.Debug("Performing periodic sync check")
 
         // Calculate current hash
-        currentHash, err := w.calculateResourcesHash()
-        if err != nil </span><span class="cov0" title="0">{
-                logger.Error("Failed to calculate hash: %v", err)
-        }</span>
+        currentHash, e</span><span class="cov0" title="0">rr := w.calculateResourcesHash()
+        if err != nil {
+                </span>logger.Error("Failed to calculate hash: %v", err)
+        }
 
-        // If hash hasn't changed, skip sync entirely
-        <span class="cov0" title="0">if currentHash != "" &amp;&amp; currentHash == w.lastHash </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">// If hash hasn't changed, skip sync entirely
+</span>        if currentHash != "" &amp;&amp; currentHash == w.lastHash {
                 logger.Debug("No changes detected (hash match), skipping periodic sync")
-                return nil
-        }</span>
-
-        <span class="cov0" title="0">logger.Debug("Hash changed, performing sync")
-
-        resources, err := config.LoadBindResourcesFromDir(w.resourcePath)
-        if err != nil </span><span class="cov0" title="0">{
-                return err
-        }</span>
-
-        // Remove binds for files that no longer exist
-        <span class="cov0" title="0">for path := range w.resources </span><span class="cov0" title="0">{
-                if _, exists := resources[path]; !exists </span><span class="cov0" title="0">{
-                        w.handleRemove(path)
-                }</span>
+                </span>return nil
         }
 
-        // Apply all resources (hash already changed, so we need to sync)
-        <span class="cov0" title="0">for path, resource := range resources </span><span class="cov0" title="0">{
-                for i := range resource.Binds </span><span class="cov0" title="0">{
-                        bind := &amp;resource.Binds[i]
-                        if err := w.manager.ApplyBind(bind); err != nil </span><span class="cov0" title="0">{
-                                logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
-                                continue</span>
-                        }
+        logger.Debug("Hash changed, performing sync")
 
-                        <span class="cov0" title="0">if w.monitor != nil &amp;&amp; bind.Enabled </span><span class="cov0" title="0">{
-                                w.monitor.RegisterBind(bind)
-                        }</span>
+        resources, err</span><span class="cov0" title="0"> := config.LoadBindResourcesFromDir(w.resourcePath)
+        if err != nil {
+                </span>return err
+        }
+
+        <span class="cov0" title="0">// Remove binds for files that</span><span class="cov0" title="0"> no longer exist
+        for path := range w.resources {
+</span>                if _, exists := resources[path]; !exists {
+                        </span>w.handleRemove(path)
                 }
-                <span class="cov0" title="0">w.resources[path] = resource
-                logger.Info("Successfully synced resource from %s", path)</span>
         }
 
-        // Cleanup orphaned hapctl- configs
-        <span class="cov0" title="0">if err := w.manager.CleanupOrphanedConfigs(resources); err != nil </span><span class="cov0" title="0">{
-                logger.Error("Failed to cleanup orphaned configs: %v", err)
-        }</span>
+        <span class="cov0" title="0">// Apply all configs with single reloa</span><span class="cov0" title="0">d
+        if err := w.manager.ApplyConfig</span><span class="cov0" title="0">(resources); err != nil {
+                logger.Error("Failed to apply configs: %v", err)
+        }
+</span>
+        // Register</span> binds for monitoring
+        for path, resource := range resources {
+                for i := range resource.Binds {
+                        <span class="cov0" title="0">bind := &amp;resource.Binds[i]
+</span>                        if w.monitor != nil &amp;&amp; bind.Enabled {
+                                </span>w.monitor.RegisterBind(bind)
+                        }
+                <span class="cov0" title="0">}
+                w.resources[path] = resource
+</span>                logger.Info("Successfully synced resource from %s", path)
+        }
 
-        <span class="cov0" title="0">w.lastHash = currentHash
-        return nil</span>
+        <span class="cov0" title="0">// Cleanup orphaned hapctl- configs
+</span>        if err := w.manager.CleanupOrphanedConfigs(resources); err != nil {
+                </span>logger.Error("Failed to cleanup orphaned configs: %v", err)
+        }
+
+        w.lastHash</span> = currentHash
+        return nil
 }
 
-func (w *Watcher) forcedResync() error <span class="cov0" title="0">{
-        logger.Info("Performing forced full resync")
+func (w *Watcher) forcedResync() error {
+        logger.Debug("Checking if forced resync is needed")
 
-        resources, err := config.LoadBindResourcesFromDir(w.resourcePath)
-        if err != nil </span><span class="cov0" title="0">{
-                return err
-        }</span>
+        // Calculate current hash
+        currentHash, e</span><span class="cov0" title="0">rr := w.calculateResourcesHash()
+        if err != nil {
+                </span>logger.Error("Failed to calculate hash: %v", err)
+        }
 
-        // Remove binds for files that no longer exist
-        <span class="cov0" title="0">for path := range w.resources </span><span class="cov0" title="0">{
-                if _, exists := resources[path]; !exists </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">// If hash hasn't changed, skip forced resync enti</span><span class="cov0" title="0">rely
+        if currentHash != "" &amp;&amp; currentHash == w.lastHash {
+                logger.Debug("No changes detected (hash match), skipping forced resync")
+                </span>return nil
+        }
+
+        logger.Info("Hash changed, performing forced full resync")
+
+        resources, err</span><span class="cov0" title="0"> := config.LoadBindResourcesFromDir(w.resourcePath)
+        if err != nil {
+                </span>return err
+        }
+
+        <span class="cov0" title="0">// Clear monitor bin</span><span class="cov0" title="0">ds to avoid duplicates
+        if w.monitor != nil {
+                </span>w.monitor.ClearBinds()
+        }
+
+        <span class="cov0" title="0">// Remove binds for files that</span><span class="cov0" title="0"> no longer exist
+        for path := range w.resources {
+</span>                if _, exists := resources[path]; !exists {
                         logger.Info("Removing stale resource: %s", path)
-                        w.handleRemove(path)
-                }</span>
+                        </span>w.handleRemove(path)
+                }
         }
 
-        // Force sync all files
-        <span class="cov0" title="0">for path := range resources </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">// Force sync all files
+</span>        for path := range resources {
                 logger.Debug("Force syncing: %s", path)
-                w.syncFile(path)
-        }</span>
+                </span>w.syncFile(path)
+        }
 
-        // Cleanup orphaned hapctl- configs
-        <span class="cov0" title="0">logger.Debug("Checking for orphaned configs")
-        if err := w.manager.CleanupOrphanedConfigs(resources); err != nil </span><span class="cov0" title="0">{
-                logger.Error("Failed to cleanup orphaned configs: %v", err)
-        }</span>
+        <span class="cov0" title="0">// Cleanup orphaned hapctl- configs
+        logger.Debug("Checking for orphaned configs")
+</span>        if err := w.manager.CleanupOrphanedConfigs(resources); err != nil {
+                </span>logger.Error("Failed to cleanup orphaned configs: %v", err)
+        }
 
-        <span class="cov0" title="0">logger.Info("Forced resync completed, processed %d resources", len(resources))
-        return nil</span>
+        w.lastHash = currentHash
+        logger.Inf</span>o("Forced resync completed, processed %d resources", len(resources))
+        return nil
 }
 
-func isYAMLFile(path string) bool <span class="cov0" title="0">{
+func isYAMLFile(path string) bool {
         ext := filepath.Ext(path)
-        return ext == ".yaml" || ext == ".yml"
-}</span>
+        </span>return ext == ".yaml" || ext == ".yml"
+}
 
-func (w *Watcher) calculateResourcesHash() (string, error) <span class="cov0" title="0">{
+func (w *Watcher) calculateResourcesHash() (string, error) {
         var files []string
 
-        err := filepath.Walk(w.resourcePath, func(path string, info os.FileInfo, err error) error </span><span class="cov0" title="0">{
-                if err != nil </span><span class="cov0" title="0">{
-                        return err
-                }</span>
-                <span class="cov0" title="0">if !info.IsDir() &amp;&amp; isYAMLFile(path) </span><span class="cov0" title="0">{
-                        files = append(files, path)
-                }</span>
-                <span class="cov0" title="0">return nil</span>
+</span>        err := filepath</span><span class="cov0" title="0">.Walk(w.resourcePath, func(path string, info os.FileInfo, err error) error {
+                if err != nil {
+                        </span>return err
+                <span class="cov0" title="0">}
+</span>                if !info.IsDir() &amp;&amp; isYAMLFile(path) {
+                        </span>files = append(files, path)
+                <span class="cov0" title="0">}
+</span>                return nil
         })
 
-        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
-                return "", err
-        }</span>
-
-        // Sort files for consistent hash
-        <span class="cov0" title="0">sort.Strings(files)
-
-        hasher := sha256.New()
-        for _, file := range files </span><span class="cov0" title="0">{
-                f, err := os.Open(file)
-                if err != nil </span><span class="cov0" title="0">{
-                        logger.Error("Failed to open file for hashing: %s: %v", file, err)
-                        continue</span>
-                }
-
-                <span class="cov0" title="0">if _, err := io.Copy(hasher, f); err != nil </span><span class="cov0" title="0">{
-                        _ = f.Close()
-                        logger.Error("Failed to hash file: %s: %v", file, err)
-                        continue</span>
-                }
-                <span class="cov0" title="0">_ = f.Close()</span>
+</span>        if err != nil {
+                </span>return "", err
         }
 
-        <span class="cov0" title="0">return hex.EncodeToString(hasher.Sum(nil)), nil</span>
+        <span class="cov0" title="0">// Sort files for consistent hash
+        sort.Strings(files)
+
+        hasher := sha256.New()
+</span>        for _, file := range files {
+                f, err := os.O</span><span class="cov0" title="0">pen(file)
+                if err != nil {
+                        logger.E</span>rror("Failed to open file for hashing: %s: %v", file, err)
+                        continue
+                }
+
+</span>                if _, err := io.Copy(hasher, f); err != nil {
+                        _ = f.Close()
+                        logger.E</span>rror("Failed to hash file: %s: %v", file, err)
+                        continue
+                <span class="cov0" title="0">}
+</span>                _ = f.Close()
+        }
+
+</span>        return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 </pre>
 		

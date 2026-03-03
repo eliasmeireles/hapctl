@@ -16,32 +16,33 @@ import (
 type Monitor struct {
 	interval time.Duration
 	webhook  *models.WebhookConfig
-	binds    []*models.Bind
+	binds    []models.Bind
 }
 
 func NewMonitor(cfg *models.MonitoringConfig) *Monitor {
 	return &Monitor{
 		interval: cfg.Interval,
 		webhook:  cfg.Webhook,
-		binds:    make([]*models.Bind, 0),
+		binds:    make([]models.Bind, 0),
 	}
 }
 
 func (m *Monitor) RegisterBind(bind *models.Bind) {
 	// Check if bind already exists to avoid duplicates
-	for _, existingBind := range m.binds {
-		if existingBind.Name == bind.Name {
-			logger.Debug("Bind %s already registered, skipping", bind.Name)
+	for i := range m.binds {
+		if m.binds[i].Name == bind.Name && m.binds[i].Port == bind.Port && m.binds[i].IP == bind.IP {
+			logger.Debug("Bind %s:%d already registered, skipping", bind.Name, bind.Port)
 			return
 		}
 	}
-	m.binds = append(m.binds, bind)
-	logger.Debug("Registered bind for monitoring: %s", bind.Name)
+	// Store a copy of the bind, not the pointer
+	m.binds = append(m.binds, *bind)
+	logger.Debug("Registered bind for monitoring: %s:%d", bind.Name, bind.Port)
 }
 
 func (m *Monitor) UnregisterBind(bindName string) {
-	for i, bind := range m.binds {
-		if bind.Name == bindName {
+	for i := range m.binds {
+		if m.binds[i].Name == bindName {
 			m.binds = append(m.binds[:i], m.binds[i+1:]...)
 			logger.Debug("Unregistered bind from monitoring: %s", bindName)
 			return
@@ -50,7 +51,7 @@ func (m *Monitor) UnregisterBind(bindName string) {
 }
 
 func (m *Monitor) ClearBinds() {
-	m.binds = make([]*models.Bind, 0)
+	m.binds = make([]models.Bind, 0)
 	logger.Debug("Cleared all registered binds")
 }
 
@@ -85,16 +86,16 @@ func (m *Monitor) checkBinds() {
 		Binds:     make([]models.BindStatus, 0, len(m.binds)),
 	}
 
-	for _, bind := range m.binds {
-		if !bind.Enabled {
+	for i := range m.binds {
+		if !m.binds[i].Enabled {
 			continue
 		}
 
-		status := m.checkBind(bind)
+		status := m.checkBind(&m.binds[i])
 		report.Binds = append(report.Binds, status)
 
 		if status.Status != "healthy" {
-			logger.Error("Bind %s is unhealthy: %s", bind.Name, status.Error)
+			logger.Error("Bind %s is unhealthy: %s", m.binds[i].Name, status.Error)
 		}
 	}
 
