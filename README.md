@@ -30,13 +30,43 @@ HAProxy Control - A modern CLI tool for managing HAProxy configurations dynamica
 
 ## Installation
 
-### Prerequisites
+### Quick Install (Pre-built Binaries)
 
+Install the latest release without needing Go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eliasmeireles/hapctl/main/install.sh | bash
+```
+
+Or install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eliasmeireles/hapctl/main/install.sh | bash -s v0.1.0
+```
+
+**Manual installation:**
+
+1. Download the binary for your platform from [GitHub Releases](https://github.com/eliasmeireles/hapctl/releases)
+2. Extract and install:
+
+```bash
+# Linux AMD64
+wget https://github.com/eliasmeireles/hapctl/releases/latest/download/hapctl-linux-amd64
+chmod +x hapctl-linux-amd64
+sudo mv hapctl-linux-amd64 /usr/local/bin/hapctl
+
+# Linux ARM64
+wget https://github.com/eliasmeireles/hapctl/releases/latest/download/hapctl-linux-arm64
+chmod +x hapctl-linux-arm64
+sudo mv hapctl-linux-arm64 /usr/local/bin/hapctl
+```
+
+### Build from Source
+
+**Prerequisites:**
 - Linux system (Ubuntu/Debian recommended)
 - Go 1.22+ (for building from source)
 - sudo privileges
-
-### Build from Source
 
 ```bash
 make build
