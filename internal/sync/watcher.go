@@ -191,16 +191,16 @@ func (w *Watcher) periodicSync() error {
 		return err
 	}
 
+	// Remove binds for files that no longer exist
 	for path := range w.resources {
 		if _, exists := resources[path]; !exists {
 			w.handleRemove(path)
 		}
 	}
 
+	// Sync all files (new and existing) to catch changes like enabled: false
 	for path := range resources {
-		if _, exists := w.resources[path]; !exists {
-			w.syncFile(path)
-		}
+		w.syncFile(path)
 	}
 
 	return nil

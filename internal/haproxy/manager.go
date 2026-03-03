@@ -2,7 +2,10 @@ package haproxy
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/eliasmeireles/hapctl/internal/logger"
 	"github.com/eliasmeireles/hapctl/internal/models"
@@ -32,10 +35,15 @@ func (m *Manager) ApplyBind(bind *models.Bind) error {
 	}
 
 	logger.Info("Applying bind configuration for %s", bind.Name)
+	logger.Info("  Type: %s, IP: %s, Port: %d", bind.Type, bind.IP, bind.Port)
+	logger.Info("  Backend servers: %d", len(bind.Backend.Servers))
 
 	if err := m.generator.WriteBindConfig(bind); err != nil {
 		return fmt.Errorf("failed to write bind config: %w", err)
 	}
+
+	config, _ := m.generator.GenerateBindConfig(bind)
+	logger.Debug("Generated config:\n%s", config)
 
 	if err := m.ValidateConfig(); err != nil {
 		logger.Error("HAProxy config validation failed: %v", err)
@@ -49,7 +57,7 @@ func (m *Manager) ApplyBind(bind *models.Bind) error {
 		return fmt.Errorf("failed to reload HAProxy: %w", err)
 	}
 
-	logger.Info("Successfully applied bind configuration for %s", bind.Name)
+	logger.Info("✓ Successfully applied bind configuration for %s", bind.Name)
 	return nil
 }
 
@@ -60,6 +68,7 @@ func (m *Manager) RemoveBind(bind *models.Bind) error {
 	}
 
 	logger.Info("Removing bind configuration for %s", bind.Name)
+	logger.Info("  Type: %s, IP: %s, Port: %d", bind.Type, bind.IP, bind.Port)
 
 	if err := m.generator.RemoveBindConfig(bind); err != nil {
 		return fmt.Errorf("failed to remove bind config: %w", err)
@@ -69,7 +78,7 @@ func (m *Manager) RemoveBind(bind *models.Bind) error {
 		return fmt.Errorf("failed to reload HAProxy: %w", err)
 	}
 
-	logger.Info("Successfully removed bind configuration for %s", bind.Name)
+	logger.Info("✓ Successfully removed bind configuration for %s", bind.Name)
 	return nil
 }
 
@@ -82,13 +91,94 @@ func (m *Manager) ValidateConfig() error {
 	return nil
 }
 
+func (m *Manager) regenerateMainConfig() error {
+	baseConfigPath := "/etc/haproxy/haproxy.cfg"
+	backupPath := "/etc/haproxy/haproxy.cfg.backup"
+
+	// Read base config (up to hapctl managed section)
+	baseConfig, err := os.ReadFile(baseConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to read base config: %w", err)
+	}
+
+	// Find where hapctl section starts and keep only the base
+	configStr := string(baseConfig)
+	hapctlMarker := "# hapctl managed configurations"
+	baseOnly := configStr
+	if idx := strings.Index(configStr, hapctlMarker); idx != -1 {
+		baseOnly = configStr[:idx]
+	}
+
+	// Build new config with services.d includes
+	var newConfig strings.Builder
+	newConfig.WriteString(baseOnly)
+	newConfig.WriteString("\n# hapctl managed configurations\n")
+
+	// Include HTTP services
+	httpDir := filepath.Join(m.generator.servicesDir, HTTPServicesDir)
+	if httpConfigs, err := m.readServiceConfigs(httpDir); err == nil && len(httpConfigs) > 0 {
+		newConfig.WriteString("# HTTP services\n")
+		newConfig.WriteString(httpConfigs)
+	}
+
+	// Include TCP services
+	tcpDir := filepath.Join(m.generator.servicesDir, TCPServicesDir)
+	if tcpConfigs, err := m.readServiceConfigs(tcpDir); err == nil && len(tcpConfigs) > 0 {
+		newConfig.WriteString("\n# TCP services\n")
+		newConfig.WriteString(tcpConfigs)
+	}
+
+	// Backup current config
+	os.WriteFile(backupPath, baseConfig, 0644)
+
+	// Write new config
+	if err := os.WriteFile(baseConfigPath, []byte(newConfig.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write new config: %w", err)
+	}
+
+	logger.Debug("Regenerated main HAProxy config")
+	return nil
+}
+
+func (m *Manager) readServiceConfigs(dir string) (string, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.cfg"))
+	if err != nil {
+		return "", err
+	}
+
+	var configs strings.Builder
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			logger.Error("Failed to read service config %s: %v", file, err)
+			continue
+		}
+		configs.WriteString(string(content))
+		configs.WriteString("\n")
+	}
+
+	return configs.String(), nil
+}
+
 func (m *Manager) ReloadHAProxy() error {
+	// Regenerate main config with all services.d includes
+	if err := m.regenerateMainConfig(); err != nil {
+		logger.Error("Failed to regenerate main config: %v", err)
+		return fmt.Errorf("failed to regenerate config: %w", err)
+	}
+
 	cmd := exec.Command("systemctl", "reload", "haproxy")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("reload failed: %s", string(output))
 	}
-	logger.Info("HAProxy reloaded successfully")
+
+	// Check HAProxy status
+	statusCmd := exec.Command("systemctl", "is-active", "haproxy")
+	statusOutput, _ := statusCmd.CombinedOutput()
+	status := strings.TrimSpace(string(statusOutput))
+
+	logger.Info("HAProxy reloaded successfully (status: %s)", status)
 	return nil
 }
 
