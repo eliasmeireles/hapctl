@@ -26,8 +26,4 @@ issues:
 run:
   timeout: 5m
   tests: true
-
-# Go version configuration
-# Allow golangci-lint to work with newer Go versions
-run:
   go: '1.23'
