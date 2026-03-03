@@ -104,7 +104,22 @@ func (m *Manager) regenerateMainConfig() error {
 	// Read base config (up to hapctl managed section)
 	baseConfig, err := os.ReadFile(baseConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to read base config: %w", err)
+		if os.IsNotExist(err) {
+			logger.Info("HAProxy config not found, creating default configuration")
+			baseConfig = []byte(DefaultHAProxyConfig)
+			if err := os.WriteFile(baseConfigPath, baseConfig, 0644); err != nil {
+				return fmt.Errorf("failed to create default config: %w", err)
+			}
+
+			if !ErrorPagesExist() {
+				logger.Info("Generating HAProxy error pages")
+				if err := GenerateErrorPages(); err != nil {
+					logger.Warn("Failed to generate error pages: %v", err)
+				}
+			}
+		} else {
+			return fmt.Errorf("failed to read base config: %w", err)
+		}
 	}
 
 	// Find where hapctl section starts and keep only the base
