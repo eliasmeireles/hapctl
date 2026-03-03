@@ -173,14 +173,36 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 	}
 
 	var configs strings.Builder
+	// Keywords that start a valid HAProxy configuration line in our generated files
+	validKeywords := []string{"frontend", "backend", "listen", "    ", "#", "bind", "mode", "server", "default_backend", "balance", "option", "redirect"}
+
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
 			logger.Error("Failed to read service config %s: %v", file, err)
 			continue
 		}
-		configs.WriteString(string(content))
-		configs.WriteString("\n")
+
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+
+			isValid := false
+			for _, kw := range validKeywords {
+				if strings.HasPrefix(line, kw) {
+					isValid = true
+					break
+				}
+			}
+
+			if isValid {
+				configs.WriteString(line)
+				configs.WriteString("\n")
+			}
+		}
 	}
 
 	return configs.String(), nil

@@ -61,7 +61,7 @@
 				
 				<option value="file2">github.com/eliasmeireles/hapctl/internal/cmd/apply.go (27.3%)</option>
 				
-				<option value="file3">github.com/eliasmeireles/hapctl/internal/cmd/haproxy_config.go (54.2%)</option>
+				<option value="file3">github.com/eliasmeireles/hapctl/internal/cmd/haproxy_config.go (53.1%)</option>
 				
 				<option value="file4">github.com/eliasmeireles/hapctl/internal/cmd/install.go (8.3%)</option>
 				
@@ -409,8 +409,10 @@ func generateHAProxyConfig() error <span class="cov1" title="1">{
                 fmt.Printf("⚠️  HAProxy config already exists at: %s\n", configPath)
                 fmt.Print("Overwrite? (y/N): ")
                 var response string
-                fmt.Scanln(&amp;response)
-                if response != "y" &amp;&amp; response != "Y" </span><span class="cov0" title="0">{
+                if _, err := fmt.Scanln(&amp;response); err != nil </span><span class="cov0" title="0">{
+                        response = "n"
+                }</span>
+                <span class="cov0" title="0">if response != "y" &amp;&amp; response != "Y" </span><span class="cov0" title="0">{
                         fmt.Println("Cancelled")
                         return nil
                 }</span>
@@ -1673,14 +1675,36 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) <span class="co
         }</span>
 
         <span class="cov0" title="0">var configs strings.Builder
+        // Keywords that start a valid HAProxy configuration line in our generated files
+        validKeywords := []string{"frontend", "backend", "listen", "    ", "#", "bind", "mode", "server", "default_backend", "balance", "option", "redirect"}
+
         for _, file := range files </span><span class="cov0" title="0">{
                 content, err := os.ReadFile(file)
                 if err != nil </span><span class="cov0" title="0">{
                         logger.Error("Failed to read service config %s: %v", file, err)
                         continue</span>
                 }
-                <span class="cov0" title="0">configs.WriteString(string(content))
-                configs.WriteString("\n")</span>
+
+                <span class="cov0" title="0">lines := strings.Split(string(content), "\n")
+                for _, line := range lines </span><span class="cov0" title="0">{
+                        trimmed := strings.TrimSpace(line)
+                        if trimmed == "" </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        <span class="cov0" title="0">isValid := false
+                        for _, kw := range validKeywords </span><span class="cov0" title="0">{
+                                if strings.HasPrefix(line, kw) </span><span class="cov0" title="0">{
+                                        isValid = true
+                                        break</span>
+                                }
+                        }
+
+                        <span class="cov0" title="0">if isValid </span><span class="cov0" title="0">{
+                                configs.WriteString(line)
+                                configs.WriteString("\n")
+                        }</span>
+                }
         }
 
         <span class="cov0" title="0">return configs.String(), nil</span>
