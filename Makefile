@@ -4,7 +4,8 @@ BINARY_NAME=hapctl
 BUILD_DIR=bin
 GO=go
 GOFLAGS=-v
-LDFLAGS=-ldflags "-s -w"
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS=-ldflags "-s -w -X github.com/eliasmeireles/hapctl/internal/cmd.Version=$(VERSION)"
 
 help:
 	@echo "Available targets:"

@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	Version = "dev"
 	cfgFile string
 	rootCmd = &cobra.Command{
 		Use:   "hapctl",
@@ -15,7 +16,7 @@ var (
 		Long: `hapctl is a CLI and agent tool for managing HAProxy configurations dynamically.
 It monitors YAML configuration files and automatically applies changes to HAProxy,
 with built-in health monitoring and webhook notifications.`,
-		Version: "1.0.0",
+		Version: Version,
 	}
 )
 
