@@ -27,10 +27,10 @@ func TestGenerateBindConfig(t *testing.T) {
 
 		config, err := generator.GenerateBindConfig(bind)
 		require.NoError(t, err)
-		require.Contains(t, config, "listen test-tcp")
+		require.Contains(t, config, "listen hapctl-test-tcp")
 		require.Contains(t, config, "bind *:8080")
 		require.Contains(t, config, "mode tcp")
-		require.Contains(t, config, "server server1 127.0.0.1:8080")
+		require.Contains(t, config, "server hapctl-server1 127.0.0.1:8080")
 	})
 
 	t.Run("must generate HTTP bind config", func(t *testing.T) {
@@ -50,12 +50,12 @@ func TestGenerateBindConfig(t *testing.T) {
 
 		config, err := generator.GenerateBindConfig(bind)
 		require.NoError(t, err)
-		require.Contains(t, config, "frontend test-http")
+		require.Contains(t, config, "frontend hapctl-test-http")
 		require.Contains(t, config, "bind 10.0.0.1:80")
 		require.Contains(t, config, "mode http")
-		require.Contains(t, config, "backend test-http_backend")
-		require.Contains(t, config, "server web1 127.0.0.1:3000")
-		require.Contains(t, config, "server web2 127.0.0.1:3001")
+		require.Contains(t, config, "backend hapctl-test-http-backend")
+		require.Contains(t, config, "server hapctl-web1 127.0.0.1:3000")
+		require.Contains(t, config, "server hapctl-web2 127.0.0.1:3001")
 	})
 
 	t.Run("must fail with unsupported bind type", func(t *testing.T) {
