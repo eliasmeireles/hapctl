@@ -107,7 +107,7 @@ func (m *Monitor) checkBind(bind *models.Bind) models.BindStatus {
 		Timestamp: time.Now(),
 	}
 
-	address := fmt.Sprintf("%s:%d", m.resolveIP(bind.IP), bind.Port)
+	address := net.JoinHostPort(m.resolveIP(bind.IP), fmt.Sprintf("%d", bind.Port))
 
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {

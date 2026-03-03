@@ -73,7 +73,7 @@
 				
 				<option value="file8">github.com/eliasmeireles/hapctl/internal/config/loader.go (75.0%)</option>
 				
-				<option value="file9">github.com/eliasmeireles/hapctl/internal/haproxy/generator.go (52.6%)</option>
+				<option value="file9">github.com/eliasmeireles/hapctl/internal/haproxy/generator.go (52.1%)</option>
 				
 				<option value="file10">github.com/eliasmeireles/hapctl/internal/haproxy/installer.go (14.3%)</option>
 				
@@ -190,8 +190,10 @@ func ensureLogDirectory() error <span class="cov0" title="0">{
         }
 
         // Ensure permissions are correct
-        <span class="cov0" title="0">os.Chmod(logDir, 0755)
-        return nil</span>
+        <span class="cov0" title="0">if err := os.Chmod(logDir, 0755); err != nil </span><span class="cov0" title="0">{
+                logger.Warn("Failed to set permissions on log directory: %v", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
 func ensureResourceDirectory(resourcePath string) error <span class="cov0" title="0">{
@@ -205,8 +207,10 @@ func ensureResourceDirectory(resourcePath string) error <span class="cov0" title
         }</span>
 
         // Ensure permissions are correct
-        <span class="cov0" title="0">os.Chmod(resourcePath, 0755)
-        logger.Info("Resource directory ready: %s", resourcePath)
+        <span class="cov0" title="0">if err := os.Chmod(resourcePath, 0755); err != nil </span><span class="cov0" title="0">{
+                logger.Warn("Failed to set permissions on resource directory: %v", err)
+        }</span>
+        <span class="cov0" title="0">logger.Info("Resource directory ready: %s", resourcePath)
         return nil</span>
 }
 
@@ -323,7 +327,7 @@ var (
 func init() <span class="cov8" title="1">{
         rootCmd.AddCommand(applyCmd)
         applyCmd.Flags().StringVarP(&amp;applyFile, "file", "f", "", "bind configuration file (required)")
-        applyCmd.MarkFlagRequired("file")
+        _ = applyCmd.MarkFlagRequired("file")
 }</span>
 
 func runApply(cmd *cobra.Command, args []string) <span class="cov0" title="0">{
@@ -653,7 +657,7 @@ var (
 func init() <span class="cov8" title="1">{
         rootCmd.AddCommand(validateCmd)
         validateCmd.Flags().StringVarP(&amp;validateFile, "file", "f", "", "bind configuration file (required)")
-        validateCmd.MarkFlagRequired("file")
+        _ = validateCmd.MarkFlagRequired("file")
 }</span>
 
 func runValidate(cmd *cobra.Command, args []string) <span class="cov0" title="0">{
@@ -965,13 +969,14 @@ func (g *Generator) ensureDirectories() error <span class="cov4" title="2">{
 func (g *Generator) GenerateBindConfig(bind *models.Bind) (string, error) <span class="cov7" title="3">{
         var builder strings.Builder
 
-        if bind.Type == "http" </span><span class="cov1" title="1">{
-                builder.WriteString(g.generateHTTPConfig(bind))
-        }</span> else<span class="cov4" title="2"> if bind.Type == "tcp" </span><span class="cov1" title="1">{
-                builder.WriteString(g.generateTCPConfig(bind))
-        }</span> else<span class="cov1" title="1"> {
-                return "", fmt.Errorf("unsupported bind type: %s", bind.Type)
-        }</span>
+        switch bind.Type </span>{
+        case "http":<span class="cov1" title="1">
+                builder.WriteString(g.generateHTTPConfig(bind))</span>
+        case "tcp":<span class="cov1" title="1">
+                builder.WriteString(g.generateTCPConfig(bind))</span>
+        default:<span class="cov1" title="1">
+                return "", fmt.Errorf("unsupported bind type: %s", bind.Type)</span>
+        }
 
         <span class="cov4" title="2">return builder.String(), nil</span>
 }
@@ -982,22 +987,22 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string <span class="co
         frontendName := NamePrefix + bind.Name
         backendName := NamePrefix + bind.Name + "-backend"
 
-        builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-        builder.WriteString(fmt.Sprintf("frontend %s\n", frontendName))
+        fmt.Fprintf(&amp;builder, "# %s\n", bind.Description)
+        fmt.Fprintf(&amp;builder, "frontend %s\n", frontendName)
 
         bindAddr := g.formatBindAddress(bind)
-        builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
+        fmt.Fprintf(&amp;builder, "    bind %s\n", bindAddr)
         builder.WriteString("    mode http\n")
-        builder.WriteString(fmt.Sprintf("    default_backend %s\n\n", backendName))
+        fmt.Fprintf(&amp;builder, "    default_backend %s\n\n", backendName)
 
-        builder.WriteString(fmt.Sprintf("backend %s\n", backendName))
+        fmt.Fprintf(&amp;builder, "backend %s\n", backendName)
         builder.WriteString("    mode http\n")
         builder.WriteString("    balance roundrobin\n")
 
         if len(bind.Backend.Servers) &gt; 0 </span><span class="cov1" title="1">{
                 for _, server := range bind.Backend.Servers </span><span class="cov4" title="2">{
                         serverName := NamePrefix + server.Name
-                        builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
+                        fmt.Fprintf(&amp;builder, "    server %s %s check\n", serverName, server.Address)
                 }</span>
         }
 
@@ -1009,18 +1014,18 @@ func (g *Generator) generateTCPConfig(bind *models.Bind) string <span class="cov
 
         listenName := NamePrefix + bind.Name
 
-        builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-        builder.WriteString(fmt.Sprintf("listen %s\n", listenName))
+        fmt.Fprintf(&amp;builder, "# %s\n", bind.Description)
+        fmt.Fprintf(&amp;builder, "listen %s\n", listenName)
 
         bindAddr := g.formatBindAddress(bind)
-        builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
+        fmt.Fprintf(&amp;builder, "    bind %s\n", bindAddr)
         builder.WriteString("    mode tcp\n")
 
         if len(bind.Backend.Servers) &gt; 0 </span><span class="cov1" title="1">{
                 builder.WriteString("    balance roundrobin\n")
                 for _, server := range bind.Backend.Servers </span><span class="cov1" title="1">{
                         serverName := NamePrefix + server.Name
-                        builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
+                        fmt.Fprintf(&amp;builder, "    server %s %s check\n", serverName, server.Address)
                 }</span>
         }
 
@@ -1378,10 +1383,12 @@ func (m *Manager) regenerateMainConfig() error <span class="cov0" title="0">{
         }</span>
 
         // Backup current config
-        <span class="cov0" title="0">os.WriteFile(backupPath, baseConfig, 0644)
+        <span class="cov0" title="0">if err := os.WriteFile(backupPath, baseConfig, 0644); err != nil </span><span class="cov0" title="0">{
+                logger.Warn("Failed to backup config: %v", err)
+        }</span>
 
         // Write new config
-        if err := os.WriteFile(baseConfigPath, []byte(newConfig.String()), 0644); err != nil </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if err := os.WriteFile(baseConfigPath, []byte(newConfig.String()), 0644); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to write new config: %w", err)
         }</span>
 
@@ -1551,7 +1558,7 @@ func Init(logPath string) error <span class="cov10" title="2">{
         <span class="cov10" title="2">logDir := filepath.Dir(logPath)
         if err := os.MkdirAll(logDir, 0755); err != nil </span><span class="cov1" title="1">{
                 // Try to set proper permissions if directory was created
-                os.Chmod(logDir, 0755)
+                _ = os.Chmod(logDir, 0755)
                 homeDir, homeErr := os.UserHomeDir()
                 if homeErr != nil </span><span class="cov0" title="0">{
                         log.Printf("[WARNING] Failed to create log directory %s: %v. Could not determine home directory: %v", logDir, err, homeErr)
@@ -1787,7 +1794,7 @@ func (m *Monitor) checkBind(bind *models.Bind) models.BindStatus <span class="co
                 Timestamp: time.Now(),
         }
 
-        address := fmt.Sprintf("%s:%d", m.resolveIP(bind.IP), bind.Port)
+        address := net.JoinHostPort(m.resolveIP(bind.IP), fmt.Sprintf("%d", bind.Port))
 
         conn, err := net.DialTimeout("tcp", address, 5*time.Second)
         if err != nil </span><span class="cov0" title="0">{
@@ -1795,9 +1802,9 @@ func (m *Monitor) checkBind(bind *models.Bind) models.BindStatus <span class="co
                 status.Error = err.Error()
                 return status
         }</span>
-        <span class="cov0" title="0">defer conn.Close()
+        <span class="cov0" title="0">defer func() </span><span class="cov0" title="0">{ _ = conn.Close() }</span>()
 
-        return status</span>
+        <span class="cov0" title="0">return status</span>
 }
 
 func (m *Monitor) resolveIP(ip string) string <span class="cov0" title="0">{
@@ -1829,9 +1836,9 @@ func (m *Monitor) sendWebhook(report *models.MonitoringReport) error <span class
         if err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to send request: %w", err)
         }</span>
-        <span class="cov0" title="0">defer resp.Body.Close()
+        <span class="cov0" title="0">defer func() </span><span class="cov0" title="0">{ _ = resp.Body.Close() }</span>()
 
-        if resp.StatusCode &gt;= 400 </span><span class="cov0" title="0">{
+        <span class="cov0" title="0">if resp.StatusCode &gt;= 400 </span><span class="cov0" title="0">{
                 return fmt.Errorf("webhook returned status %d", resp.StatusCode)
         }</span>
 
@@ -2324,7 +2331,7 @@ func (w *Watcher) Start(ctx context.Context) error <span class="cov0" title="0">
                 select </span>{
                 case &lt;-ctx.Done():<span class="cov0" title="0">
                         logger.Info("Stopping sync watcher")
-                        w.watcher.Close()
+                        _ = w.watcher.Close()
                         return nil</span>
 
                 case event, ok := &lt;-w.watcher.Events:<span class="cov0" title="0">
@@ -2605,11 +2612,11 @@ func (w *Watcher) calculateResourcesHash() (string, error) <span class="cov0" ti
                 }
 
                 <span class="cov0" title="0">if _, err := io.Copy(hasher, f); err != nil </span><span class="cov0" title="0">{
-                        f.Close()
+                        _ = f.Close()
                         logger.Error("Failed to hash file: %s: %v", file, err)
                         continue</span>
                 }
-                <span class="cov0" title="0">f.Close()</span>
+                <span class="cov0" title="0">_ = f.Close()</span>
         }
 
         <span class="cov0" title="0">return hex.EncodeToString(hasher.Sum(nil)), nil</span>

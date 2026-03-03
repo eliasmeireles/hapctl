@@ -97,22 +97,22 @@ func (g *Generator) generateHTTPConfig(bind *models.Bind) string {
 	frontendName := NamePrefix + bind.Name
 	backendName := NamePrefix + bind.Name + "-backend"
 
-	builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-	builder.WriteString(fmt.Sprintf("frontend %s\n", frontendName))
+	fmt.Fprintf(&builder, "# %s\n", bind.Description)
+	fmt.Fprintf(&builder, "frontend %s\n", frontendName)
 
 	bindAddr := g.formatBindAddress(bind)
-	builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
+	fmt.Fprintf(&builder, "    bind %s\n", bindAddr)
 	builder.WriteString("    mode http\n")
-	builder.WriteString(fmt.Sprintf("    default_backend %s\n\n", backendName))
+	fmt.Fprintf(&builder, "    default_backend %s\n\n", backendName)
 
-	builder.WriteString(fmt.Sprintf("backend %s\n", backendName))
+	fmt.Fprintf(&builder, "backend %s\n", backendName)
 	builder.WriteString("    mode http\n")
 	builder.WriteString("    balance roundrobin\n")
 
 	if len(bind.Backend.Servers) > 0 {
 		for _, server := range bind.Backend.Servers {
 			serverName := NamePrefix + server.Name
-			builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
+			fmt.Fprintf(&builder, "    server %s %s check\n", serverName, server.Address)
 		}
 	}
 
@@ -124,18 +124,18 @@ func (g *Generator) generateTCPConfig(bind *models.Bind) string {
 
 	listenName := NamePrefix + bind.Name
 
-	builder.WriteString(fmt.Sprintf("# %s\n", bind.Description))
-	builder.WriteString(fmt.Sprintf("listen %s\n", listenName))
+	fmt.Fprintf(&builder, "# %s\n", bind.Description)
+	fmt.Fprintf(&builder, "listen %s\n", listenName)
 
 	bindAddr := g.formatBindAddress(bind)
-	builder.WriteString(fmt.Sprintf("    bind %s\n", bindAddr))
+	fmt.Fprintf(&builder, "    bind %s\n", bindAddr)
 	builder.WriteString("    mode tcp\n")
 
 	if len(bind.Backend.Servers) > 0 {
 		builder.WriteString("    balance roundrobin\n")
 		for _, server := range bind.Backend.Servers {
 			serverName := NamePrefix + server.Name
-			builder.WriteString(fmt.Sprintf("    server %s %s check\n", serverName, server.Address))
+			fmt.Fprintf(&builder, "    server %s %s check\n", serverName, server.Address)
 		}
 	}
 
