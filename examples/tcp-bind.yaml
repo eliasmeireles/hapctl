@@ -1,26 +1,43 @@
+# TCP Bind Configuration Example
+# This file demonstrates how to configure a TCP frontend/backend in HAProxy
+# Place this file in /etc/hapctl/resources/ for automatic sync
+
 binds:
-  - name: game-server
-    override: true
-    enabled: true
-    description: Game server TCP bind
-    type: tcp
-    ip: "*"
-    port: 7777
+  # TCP bind for a game server
+  - name: game-server              # Unique identifier for this bind
+    override: true                 # Override existing configuration if present
+    enabled: true                  # Enable this bind (set to false to disable without deleting)
+    description: Game server bind  # Human-readable description
+    type: tcp                      # Type: tcp or http
+    ip: "*"                        # Bind IP address (* = all interfaces, or specific IP like 192.168.1.100)
+    port: 7777                     # Port to listen on
+
+    # Backend configuration
     backend:
+      # List of backend servers
       servers:
-        - name: server1
-          address: 127.0.0.1:7777
+        - name: server1            # Server identifier
+          address: 192.168.1.10:7777  # Backend server address (IP:PORT)
+
+        # Add more servers for load balancing
+        # - name: server2
+        #   address: 192.168.1.11:7777
+        # - name: server3
+        #   address: 192.168.1.12:7777
         - name: server2
           address: 127.0.0.1:7778
 
-  - name: mysql-proxy
-    override: false
-    enabled: true
-    description: MySQL proxy
-    type: tcp
-    ip: "10.99.0.243"
-    port: 3306
+  # TCP bind for a database proxy (example with specific IP binding)
+  - name: database-proxy                # Unique identifier for this bind
+    override: false                     # Don't override if already exists
+    enabled: true                       # Enable this bind
+    description: Database proxy         # Human-readable description
+    type: tcp                           # Type: tcp or http
+    ip: "192.168.1.100"                 # Bind to specific internal IP
+    port: 3306                          # MySQL port
+
+    # Backend configuration
     backend:
       servers:
-        - name: mysql-primary
-          address: 127.0.0.1:31306
+        - name: db-primary              # Server identifier
+          address: 192.168.1.50:3306    # Backend database server (IP:PORT)

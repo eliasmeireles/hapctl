@@ -22,6 +22,7 @@ const (
 
 type Logger struct {
 	infoLogger  *log.Logger
+	warnLogger  *log.Logger
 	errorLogger *log.Logger
 	debugLogger *log.Logger
 }
@@ -70,6 +71,7 @@ func Init(logPath string) error {
 
 	defaultLogger = &Logger{
 		infoLogger:  log.New(multiWriter, "[INFO] ", log.LstdFlags),
+		warnLogger:  log.New(multiWriter, "[WARN] ", log.LstdFlags),
 		errorLogger: log.New(multiWriter, "[ERROR] ", log.LstdFlags),
 		debugLogger: log.New(multiWriter, "[DEBUG] ", log.LstdFlags),
 	}
@@ -85,12 +87,20 @@ func Info(format string, v ...interface{}) {
 	defaultLogger.infoLogger.Printf(format, v...)
 }
 
-func Error(format string, v ...interface{}) {
+func Warn(format string, args ...interface{}) {
 	if defaultLogger == nil {
-		log.Printf("[ERROR] "+format, v...)
+		log.Printf("[WARN] "+format, args...)
 		return
 	}
-	defaultLogger.errorLogger.Printf(format, v...)
+	defaultLogger.warnLogger.Printf(format, args...)
+}
+
+func Error(format string, args ...interface{}) {
+	if defaultLogger == nil {
+		log.Printf("[ERROR] "+format, args...)
+		return
+	}
+	defaultLogger.errorLogger.Printf(format, args...)
 }
 
 func Debug(format string, v ...interface{}) {

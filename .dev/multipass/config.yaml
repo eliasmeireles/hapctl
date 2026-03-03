@@ -9,3 +9,13 @@ monitoring:
   webhook:
     url: "http://localhost:9090/webhook"
     timeout: 5s
+
+ssl:
+  enabled: false  # Set to true to enable SSL certificate management
+  config-path: /etc/hapctl/ssl
+  cert-path: /etc/haproxy/certs
+  renewal-check: 12h  # Check for renewal twice daily
+  email: admin@example.com  # Required for Let's Encrypt
+  dns-provider: cloudflare  # For wildcard certificates (dns-01 challenge)
+  # dns-credentials:
+  #   api-token: "your-cloudflare-api-token"

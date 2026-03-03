@@ -1,26 +1,78 @@
-binds:
-  - name: web-api
-    override: true
-    enabled: true
-    description: Web API HTTP frontend
-    type: http
-    ip: "*"
-    port: 8080
-    backend:
-      servers:
-        - name: api-server1
-          address: 127.0.0.1:3000
-        - name: api-server2
-          address: 127.0.0.1:3001
+# HTTP Bind Configuration Example
+# This file demonstrates how to configure an HTTP frontend/backend in HAProxy
+# Place this file in /etc/hapctl/resources/ for automatic sync
 
-  - name: vault-ui
-    override: false
-    enabled: true
-    description: Vault UI
-    type: http
-    ip: "10.99.0.243"
-    port: 80
+binds:
+  # HTTP bind for a web application
+  - name: web-api                      # Unique identifier for this bind
+    override: true                     # Override existing configuration if present
+    enabled: true                      # Enable this bind (set to false to disable without deleting)
+    description: Web API HTTP frontend  # Human-readable description
+    type: http                         # Type: http or tcp
+    ip: "*"                            # Bind IP address (* = all interfaces, or specific IP like 10.0.1.100)
+    port: 8080                         # Port to listen on (80 for HTTP, 443 for HTTPS)
+
+    # Backend configuration
+    backend:
+      # List of backend servers
+      servers:
+        - name: api-server1            # Server identifier
+          address: 192.168.1.20:3000   # Backend server address (IP:PORT)
+        - name: api-server2            # Server identifier
+          address: 192.168.1.21:3001   # Backend server address (IP:PORT)
+
+    # Optional: Add SSL/TLS configuration for HTTPS
+    # ssl:
+    #   enabled: true
+    #   cert-path: /etc/haproxy/certs/example.com.pem
+
+    # Optional: Add custom HAProxy options
+    # options:
+    #   - "option httplog"
+    #   - "option forwardfor"
+    #   - "http-request set-header X-Forwarded-Proto https if { ssl_fc }"
+
+  # HTTP bind for a web application
+  - name: vault-ui                      # Unique identifier for this bind
+    override: false                     # Override existing configuration if present
+    enabled: true                      # Enable this bind (set to false to disable without deleting)
+    description: Vault UI               # Human-readable description
+    type: http                         # Type: http or tcp
+    ip: "192.168.1.101"                  # Bind IP address (* = all interfaces, or specific IP like 10.0.1.100)
+    port: 80                           # Port to listen on (80 for HTTP, 443 for HTTPS)
+
+    # Backend configuration
     backend:
       servers:
         - name: vault
           address: 127.0.0.1:31201
+
+  # HTTP bind for admin panel (example with specific IP binding)
+  - name: admin-panel                   # Unique identifier for this bind
+    override: false                     # Don't override if already exists
+    enabled: true                       # Enable this bind
+    description: Admin panel UI         # Human-readable description
+    type: http                          # Type: http or tcp
+    ip: "192.168.1.101"                 # Bind to specific internal IP
+    port: 80                            # Port to listen on
+
+    # Backend configuration
+    backend:
+      servers:
+        - name: admin-app               # Server identifier
+          address: 192.168.1.40:8080    # Backend server address (IP:PORT)
+
+  # HTTP bind for internal service (example with specific IP binding)
+  - name: internal-service              # Unique identifier for this bind
+    override: false                     # Don't override if already exists
+    enabled: true                       # Enable this bind
+    description: Internal service UI    # Human-readable description
+    type: http                          # Type: http or tcp
+    ip: "192.168.1.100"                 # Bind to specific internal IP
+    port: 80                            # Port to listen on
+
+    # Backend configuration
+    backend:
+      servers:
+        - name: internal-app            # Server identifier
+          address: 192.168.1.30:8080    # Backend server address (IP:PORT)

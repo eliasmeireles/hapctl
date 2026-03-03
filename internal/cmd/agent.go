@@ -13,6 +13,7 @@ import (
 	"github.com/eliasmeireles/hapctl/internal/haproxy"
 	"github.com/eliasmeireles/hapctl/internal/logger"
 	"github.com/eliasmeireles/hapctl/internal/monitor"
+	"github.com/eliasmeireles/hapctl/internal/ssl"
 	"github.com/eliasmeireles/hapctl/internal/sync"
 )
 
@@ -115,7 +116,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 3)
 
 	var mon *monitor.Monitor
 	if cfg.Monitoring.Enabled {
@@ -123,6 +124,16 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 		go func() {
 			if err := mon.Start(ctx); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+
+	if cfg.SSL.Enabled {
+		sslManager := ssl.NewManager(&cfg.SSL)
+
+		go func() {
+			if err := sslManager.Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()

@@ -1,0 +1,75 @@
+# SSL Certificate Configuration Example
+# This file defines which domains should have SSL certificates managed by hapctl
+# Place this file in /etc/hapctl/ssl/ (one file per domain group)
+# See docs/SSL_MANAGEMENT.md for complete documentation
+
+config:
+  # ============================================================================
+  # REQUIRED FIELDS
+  # ============================================================================
+
+  # Email for Let's Encrypt notifications (REQUIRED)
+  # Used for certificate expiration warnings and account recovery
+  # If not specified, uses the email from main config.yaml
+  mail: admin@example.com
+
+  # List of domains to manage SSL certificates for (REQUIRED)
+  # You can include multiple domains in a single certificate
+  # Supports both regular domains and wildcard domains (*.example.com)
+  # Note: Wildcard domains REQUIRE DNS-01 challenge (dns-provider must be configured)
+  domain:
+    - example.com           # Regular domain
+    - "*.example.com"       # Wildcard domain (requires DNS provider)
+    - www.example.com       # Subdomain
+    - api.example.com       # Another subdomain
+
+  # ============================================================================
+  # OPTIONAL FIELDS
+  # ============================================================================
+
+  # Optional: DNS provider for DNS-01 challenge (required for wildcard certificates)
+  # Supported providers: cloudflare, route53, digitalocean, google, etc.
+  # dns-provider: cloudflare
+
+  # Optional: DNS provider credentials (required when using dns-provider)
+  # The credentials format depends on the DNS provider
+  # For Cloudflare:
+  # dns-credentials:
+  #   api-token: "your-cloudflare-api-token"
+  #   # OR use email + api-key:
+  #   # email: "your-email@example.com"
+  #   # api-key: "your-cloudflare-global-api-key"
+
+  # Optional: Use Let's Encrypt staging server for testing (default: false)
+  # Set to true to avoid rate limits during testing
+  # staging: false
+
+  # Optional: RSA key size in bits (default: 2048)
+  # Valid values: 2048, 3072, 4096
+  # key-size: 2048
+
+  # Optional: Key type (default: rsa)
+  # Valid values: rsa, ecdsa
+  # key-type: rsa
+
+  # Optional: ECDSA curve (only used when key-type is ecdsa)
+  # Valid values: P-256, P-384, P-521
+  # ecdsa-curve: P-256
+
+  # Optional: Preferred chain (for compatibility with older clients)
+  # Example: "ISRG Root X1" or "DST Root CA X3"
+  # preferred-chain: ""
+
+  # Optional: Must-staple OCSP (default: false)
+  # Adds OCSP Must-Staple extension to certificate
+  # must-staple: false
+
+  # Optional: Reuse existing private key on renewal (default: false)
+  # reuse-key: false
+
+  # Optional: HTTP-01 challenge port (default: 80)
+  # Only used for non-wildcard domains when not using DNS challenge
+  # http-port: 80
+
+  # Optional: TLS-ALPN-01 challenge port (default: 443)
+  # tls-port: 443

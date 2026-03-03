@@ -5,6 +5,7 @@ import "time"
 type Config struct {
 	Sync       SyncConfig       `yaml:"sync"`
 	Monitoring MonitoringConfig `yaml:"monitoring"`
+	SSL        SSLManagerConfig `yaml:"ssl"`
 }
 
 type SyncConfig struct {
@@ -14,8 +15,8 @@ type SyncConfig struct {
 }
 
 type MonitoringConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled  bool           `yaml:"enabled"`
+	Interval time.Duration  `yaml:"interval"`
 	Webhook  *WebhookConfig `yaml:"webhook,omitempty"`
 }
 
