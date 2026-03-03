@@ -1,7 +1,7 @@
 package haproxy
 
 import (
-import "fmt"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
