@@ -1,4 +1,4 @@
-.PHONY: build clean install test lint fmt run help
+.PHONY: build clean install test lint fmt run version version-push help
 
 BINARY_NAME=hapctl
 BUILD_DIR=bin
@@ -9,13 +9,15 @@ LDFLAGS=-ldflags "-s -w -X github.com/eliasmeireles/hapctl/internal/cmd.Version=
 
 help:
 	@echo "Available targets:"
-	@echo "  build       - Build the binary"
-	@echo "  clean       - Remove build artifacts"
-	@echo "  install     - Install the binary to /usr/local/bin"
-	@echo "  test        - Run tests"
-	@echo "  lint        - Run linters"
-	@echo "  fmt         - Format code"
-	@echo "  run         - Run the agent with example config"
+	@echo "  build          - Build the binary"
+	@echo "  clean          - Remove build artifacts"
+	@echo "  install        - Install the binary to /usr/local/bin"
+	@echo "  test           - Run tests"
+	@echo "  lint           - Run linters"
+	@echo "  fmt            - Format code"
+	@echo "  run            - Run the agent with example config"
+	@echo "  version        - Create a new version tag (usage: make version VERSION=v0.1.0)"
+	@echo "  version-push   - Push version tag to trigger release"
 
 build:
 	@echo "Building $(BINARY_NAME)..."
@@ -66,3 +68,23 @@ build-webhook-test:
 	@mkdir -p $(BUILD_DIR)
 	cd .dev/webhook-test && $(GO) build $(GOFLAGS) $(LDFLAGS) -o ../../$(BUILD_DIR)/webhook-test .
 	@echo "✅ webhook-test built successfully"
+
+version:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required"; \
+		echo "Usage: make version VERSION=v0.1.0"; \
+		exit 1; \
+	fi
+	@./scripts/version.sh $(VERSION)
+
+version-push:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required"; \
+		echo "Usage: make version-push VERSION=v0.1.0"; \
+		exit 1; \
+	fi
+	@echo "Pushing tag $(VERSION)..."
+	@git push origin $(VERSION)
+	@echo "✅ Tag $(VERSION) pushed successfully!"
+	@echo "GitHub Actions will build and publish the release"
+	@echo "Check: https://github.com/eliasmeireles/hapctl/actions"
