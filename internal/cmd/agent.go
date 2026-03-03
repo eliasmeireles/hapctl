@@ -117,24 +117,25 @@ func runAgent(cmd *cobra.Command, args []string) {
 
 	errChan := make(chan error, 2)
 
+	var mon *monitor.Monitor
+	if cfg.Monitoring.Enabled {
+		mon = monitor.NewMonitor(&cfg.Monitoring)
+
+		go func() {
+			if err := mon.Start(ctx); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+
 	if cfg.Sync.Enabled {
-		watcher, err := sync.NewWatcher(&cfg.Sync, manager)
+		watcher, err := sync.NewWatcher(&cfg.Sync, manager, mon)
 		if err != nil {
 			exitWithError("Failed to create watcher", err)
 		}
 
 		go func() {
 			if err := watcher.Start(ctx); err != nil {
-				errChan <- err
-			}
-		}()
-	}
-
-	if cfg.Monitoring.Enabled {
-		mon := monitor.NewMonitor(&cfg.Monitoring)
-
-		go func() {
-			if err := mon.Start(ctx); err != nil {
 				errChan <- err
 			}
 		}()

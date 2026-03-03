@@ -23,12 +23,18 @@ type Watcher struct {
 	resourcePath string
 	interval     time.Duration
 	manager      *haproxy.Manager
+	monitor      Monitor
 	watcher      *fsnotify.Watcher
 	resources    map[string]*models.BindResource
 	lastHash     string
 }
 
-func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager) (*Watcher, error) {
+type Monitor interface {
+	RegisterBind(bind *models.Bind)
+	UnregisterBind(bindName string)
+}
+
+func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager, mon Monitor) (*Watcher, error) {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file watcher: %w", err)
@@ -38,6 +44,7 @@ func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager) (*Watcher, err
 		resourcePath: cfg.ResourcePath,
 		interval:     cfg.Interval,
 		manager:      manager,
+		monitor:      mon,
 		watcher:      fsWatcher,
 		resources:    make(map[string]*models.BindResource),
 	}, nil
@@ -160,6 +167,10 @@ func (w *Watcher) handleRemove(path string) {
 			if err := w.manager.RemoveBind(bind); err != nil {
 				logger.Error("Failed to remove bind %s: %v", bind.Name, err)
 			}
+
+			if w.monitor != nil {
+				w.monitor.UnregisterBind(bind.Name)
+			}
 		}
 		delete(w.resources, path)
 	}
@@ -172,9 +183,16 @@ func (w *Watcher) syncFile(path string) {
 		return
 	}
 
-	if err := w.manager.ApplyBindResource(resource); err != nil {
-		logger.Error("Failed to apply resource from %s: %v", path, err)
-		return
+	for i := range resource.Binds {
+		bind := &resource.Binds[i]
+		if err := w.manager.ApplyBind(bind); err != nil {
+			logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
+			continue
+		}
+
+		if w.monitor != nil && bind.Enabled {
+			w.monitor.RegisterBind(bind)
+		}
 	}
 
 	w.resources[path] = resource
@@ -199,9 +217,16 @@ func (w *Watcher) initialSync() error {
 	}
 
 	for path, resource := range resources {
-		if err := w.manager.ApplyBindResource(resource); err != nil {
-			logger.Error("Failed to apply resource from %s: %v", path, err)
-			continue
+		for i := range resource.Binds {
+			bind := &resource.Binds[i]
+			if err := w.manager.ApplyBind(bind); err != nil {
+				logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
+				continue
+			}
+
+			if w.monitor != nil && bind.Enabled {
+				w.monitor.RegisterBind(bind)
+			}
 		}
 		w.resources[path] = resource
 	}
@@ -241,9 +266,16 @@ func (w *Watcher) periodicSync() error {
 
 	// Apply all resources (hash already changed, so we need to sync)
 	for path, resource := range resources {
-		if err := w.manager.ApplyBindResource(resource); err != nil {
-			logger.Error("Failed to apply resource from %s: %v", path, err)
-			continue
+		for i := range resource.Binds {
+			bind := &resource.Binds[i]
+			if err := w.manager.ApplyBind(bind); err != nil {
+				logger.Error("Failed to apply bind %s from %s: %v", bind.Name, path, err)
+				continue
+			}
+
+			if w.monitor != nil && bind.Enabled {
+				w.monitor.RegisterBind(bind)
+			}
 		}
 		w.resources[path] = resource
 		logger.Info("Successfully synced resource from %s", path)

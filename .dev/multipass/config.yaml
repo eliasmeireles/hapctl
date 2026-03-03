@@ -4,5 +4,8 @@ sync:
   enabled: true
 
 monitoring:
-  enabled: false
-  interval: 10s
+  enabled: true
+  interval: 30s
+  webhook:
+    url: "http://localhost:9090/webhook"
+    timeout: 5s
