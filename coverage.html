@@ -61,33 +61,37 @@
 				
 				<option value="file2">github.com/eliasmeireles/hapctl/internal/cmd/apply.go (27.3%)</option>
 				
-				<option value="file3">github.com/eliasmeireles/hapctl/internal/cmd/install.go (8.3%)</option>
+				<option value="file3">github.com/eliasmeireles/hapctl/internal/cmd/haproxy_config.go (54.2%)</option>
 				
-				<option value="file4">github.com/eliasmeireles/hapctl/internal/cmd/root.go (16.7%)</option>
+				<option value="file4">github.com/eliasmeireles/hapctl/internal/cmd/install.go (8.3%)</option>
 				
-				<option value="file5">github.com/eliasmeireles/hapctl/internal/cmd/service.go (15.3%)</option>
+				<option value="file5">github.com/eliasmeireles/hapctl/internal/cmd/root.go (16.7%)</option>
 				
-				<option value="file6">github.com/eliasmeireles/hapctl/internal/cmd/validate.go (20.0%)</option>
+				<option value="file6">github.com/eliasmeireles/hapctl/internal/cmd/service.go (15.3%)</option>
 				
-				<option value="file7">github.com/eliasmeireles/hapctl/internal/config/bind_loader.go (87.5%)</option>
+				<option value="file7">github.com/eliasmeireles/hapctl/internal/cmd/validate.go (20.0%)</option>
 				
-				<option value="file8">github.com/eliasmeireles/hapctl/internal/config/loader.go (75.0%)</option>
+				<option value="file8">github.com/eliasmeireles/hapctl/internal/config/bind_loader.go (87.5%)</option>
 				
-				<option value="file9">github.com/eliasmeireles/hapctl/internal/haproxy/generator.go (47.2%)</option>
+				<option value="file9">github.com/eliasmeireles/hapctl/internal/config/loader.go (75.0%)</option>
 				
-				<option value="file10">github.com/eliasmeireles/hapctl/internal/haproxy/installer.go (14.3%)</option>
+				<option value="file10">github.com/eliasmeireles/hapctl/internal/haproxy/error_pages.go (83.3%)</option>
 				
-				<option value="file11">github.com/eliasmeireles/hapctl/internal/haproxy/manager.go (0.0%)</option>
+				<option value="file11">github.com/eliasmeireles/hapctl/internal/haproxy/generator.go (47.2%)</option>
 				
-				<option value="file12">github.com/eliasmeireles/hapctl/internal/logger/logger.go (52.5%)</option>
+				<option value="file12">github.com/eliasmeireles/hapctl/internal/haproxy/installer.go (14.3%)</option>
 				
-				<option value="file13">github.com/eliasmeireles/hapctl/internal/monitor/monitor.go (0.0%)</option>
+				<option value="file13">github.com/eliasmeireles/hapctl/internal/haproxy/manager.go (0.0%)</option>
 				
-				<option value="file14">github.com/eliasmeireles/hapctl/internal/ssl/loader.go (0.0%)</option>
+				<option value="file14">github.com/eliasmeireles/hapctl/internal/logger/logger.go (52.5%)</option>
 				
-				<option value="file15">github.com/eliasmeireles/hapctl/internal/ssl/manager.go (0.0%)</option>
+				<option value="file15">github.com/eliasmeireles/hapctl/internal/monitor/monitor.go (0.0%)</option>
 				
-				<option value="file16">github.com/eliasmeireles/hapctl/internal/sync/watcher.go (0.0%)</option>
+				<option value="file16">github.com/eliasmeireles/hapctl/internal/ssl/loader.go (0.0%)</option>
+				
+				<option value="file17">github.com/eliasmeireles/hapctl/internal/ssl/manager.go (0.0%)</option>
+				
+				<option value="file18">github.com/eliasmeireles/hapctl/internal/sync/watcher.go (0.0%)</option>
 				
 				</select>
 			</div>
@@ -352,6 +356,116 @@ func runApply(cmd *cobra.Command, args []string) <span class="cov0" title="0">{
 
 import (
         "fmt"
+        "os"
+
+        "github.com/spf13/cobra"
+
+        "github.com/eliasmeireles/hapctl/internal/haproxy"
+)
+
+var (
+        generateConfig bool
+        viewConfig     bool
+        configPath     string
+)
+
+var haproxyConfigCmd = &amp;cobra.Command{
+        Use:   "haproxy-config",
+        Short: "Manage HAProxy base configuration",
+        Long: `Generate or view the HAProxy base configuration file.
+This command helps manage the global and defaults sections of HAProxy config.`,
+        RunE: runHAProxyConfig,
+}
+
+func init() <span class="cov1" title="1">{
+        rootCmd.AddCommand(haproxyConfigCmd)
+        haproxyConfigCmd.Flags().BoolVar(&amp;generateConfig, "generate", false, "Generate default HAProxy base configuration")
+        haproxyConfigCmd.Flags().BoolVar(&amp;viewConfig, "view", false, "View current HAProxy configuration")
+        haproxyConfigCmd.Flags().StringVar(&amp;configPath, "path", "/etc/haproxy/haproxy.cfg", "Path to HAProxy config file")
+}</span>
+
+func runHAProxyConfig(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        if generateConfig &amp;&amp; viewConfig </span><span class="cov0" title="0">{
+                return fmt.Errorf("cannot use --generate and --view together")
+        }</span>
+
+        <span class="cov0" title="0">if !generateConfig &amp;&amp; !viewConfig </span><span class="cov0" title="0">{
+                return fmt.Errorf("must specify either --generate or --view")
+        }</span>
+
+        <span class="cov0" title="0">if generateConfig </span><span class="cov0" title="0">{
+                return generateHAProxyConfig()
+        }</span>
+
+        <span class="cov0" title="0">if viewConfig </span><span class="cov0" title="0">{
+                return viewHAProxyConfig()
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func generateHAProxyConfig() error <span class="cov1" title="1">{
+        if _, err := os.Stat(configPath); err == nil </span><span class="cov0" title="0">{
+                fmt.Printf("⚠️  HAProxy config already exists at: %s\n", configPath)
+                fmt.Print("Overwrite? (y/N): ")
+                var response string
+                fmt.Scanln(&amp;response)
+                if response != "y" &amp;&amp; response != "Y" </span><span class="cov0" title="0">{
+                        fmt.Println("Cancelled")
+                        return nil
+                }</span>
+        }
+
+        <span class="cov1" title="1">if err := os.WriteFile(configPath, []byte(haproxy.DefaultHAProxyConfig), 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to write config file: %w", err)
+        }</span>
+
+        <span class="cov1" title="1">fmt.Printf("✅ HAProxy base configuration generated at: %s\n", configPath)
+
+        if !haproxy.ErrorPagesExist() </span><span class="cov0" title="0">{
+                fmt.Println("\nGenerating error pages...")
+                if err := haproxy.GenerateErrorPages(); err != nil </span><span class="cov0" title="0">{
+                        fmt.Printf("⚠️  Warning: Failed to generate error pages: %v\n", err)
+                }</span> else<span class="cov0" title="0"> {
+                        fmt.Printf("✅ Error pages generated at: %s\n", haproxy.ErrorPagesDir)
+                }</span>
+        } else<span class="cov1" title="1"> {
+                fmt.Printf("✓ Error pages already exist at: %s\n", haproxy.ErrorPagesDir)
+        }</span>
+
+        <span class="cov1" title="1">fmt.Println("\nNext steps:")
+        fmt.Println("1. Review and customize the configuration if needed")
+        fmt.Println("2. Test the configuration: haproxy -c -f", configPath)
+        fmt.Println("3. Apply bind configurations: hapctl apply -f &lt;bind-config.yaml&gt;")
+        fmt.Println("4. Start hapctl agent: hapctl agent --config /etc/hapctl/config.yaml")
+
+        return nil</span>
+}
+
+func viewHAProxyConfig() error <span class="cov10" title="2">{
+        content, err := os.ReadFile(configPath)
+        if err != nil </span><span class="cov1" title="1">{
+                if os.IsNotExist(err) </span><span class="cov1" title="1">{
+                        fmt.Printf("❌ HAProxy config not found at: %s\n", configPath)
+                        fmt.Println("\nGenerate default config with: hapctl haproxy-config --generate")
+                        return nil
+                }</span>
+                <span class="cov0" title="0">return fmt.Errorf("failed to read config file: %w", err)</span>
+        }
+
+        <span class="cov1" title="1">fmt.Printf("HAProxy configuration at: %s\n", configPath)
+        fmt.Println("========================================")
+        fmt.Print(string(content))
+        fmt.Println("========================================")
+
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package cmd
+
+import (
+        "fmt"
 
         "github.com/spf13/cobra"
 
@@ -415,7 +529,7 @@ func runInstall(cmd *cobra.Command, args []string) <span class="cov0" title="0">
 }
 </pre>
 		
-		<pre class="file" id="file4" style="display: none">package cmd
+		<pre class="file" id="file5" style="display: none">package cmd
 
 import (
         "fmt"
@@ -455,7 +569,7 @@ func exitWithError(msg string, err error) <span class="cov0" title="0">{
 }
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package cmd
+		<pre class="file" id="file6" style="display: none">package cmd
 
 import (
         "fmt"
@@ -633,7 +747,7 @@ func systemctl(args ...string) error <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package cmd
+		<pre class="file" id="file7" style="display: none">package cmd
 
 import (
         "fmt"
@@ -685,7 +799,7 @@ func runValidate(cmd *cobra.Command, args []string) <span class="cov0" title="0"
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package config
+		<pre class="file" id="file8" style="display: none">package config
 
 import (
         "fmt"
@@ -794,7 +908,7 @@ func validateBindResource(resource *models.BindResource) error <span class="cov9
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package config
+		<pre class="file" id="file9" style="display: none">package config
 
 import (
         "fmt"
@@ -889,7 +1003,114 @@ func validateConfig(cfg *models.Config) error <span class="cov7" title="4">{
 }
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package haproxy
+		<pre class="file" id="file10" style="display: none">package haproxy
+
+import (
+        "fmt"
+        "os"
+        "path/filepath"
+)
+
+const (
+        DefaultErrorPagesDir = "/etc/haproxy/errors"
+)
+
+var ErrorPagesDir = DefaultErrorPagesDir
+
+var errorPages = map[int]string{
+        400: `HTTP/1.0 400 Bad Request
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;400 Bad Request&lt;/h1&gt;
+Your browser sent an invalid request.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        403: `HTTP/1.0 403 Forbidden
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;403 Forbidden&lt;/h1&gt;
+Request forbidden by administrative rules.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        408: `HTTP/1.0 408 Request Time-out
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;408 Request Time-out&lt;/h1&gt;
+Your browser didn't send a complete request in time.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        500: `HTTP/1.0 500 Internal Server Error
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;500 Internal Server Error&lt;/h1&gt;
+An internal server error occurred.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        502: `HTTP/1.0 502 Bad Gateway
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;502 Bad Gateway&lt;/h1&gt;
+The server returned an invalid or incomplete response.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        503: `HTTP/1.0 503 Service Unavailable
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;503 Service Unavailable&lt;/h1&gt;
+No server is available to handle this request.
+&lt;/body&gt;&lt;/html&gt;
+`,
+        504: `HTTP/1.0 504 Gateway Time-out
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+&lt;html&gt;&lt;body&gt;&lt;h1&gt;504 Gateway Time-out&lt;/h1&gt;
+The server didn't respond in time.
+&lt;/body&gt;&lt;/html&gt;
+`,
+}
+
+func GenerateErrorPages() error <span class="cov3" title="2">{
+        if err := os.MkdirAll(ErrorPagesDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create errors directory: %w", err)
+        }</span>
+
+        <span class="cov3" title="2">for code, content := range errorPages </span><span class="cov10" title="14">{
+                filename := filepath.Join(ErrorPagesDir, fmt.Sprintf("%d.http", code))
+
+                if err := os.WriteFile(filename, []byte(content), 0644); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to write error page %d: %w", code, err)
+                }</span>
+        }
+
+        <span class="cov3" title="2">return nil</span>
+}
+
+func ErrorPagesExist() bool <span class="cov3" title="2">{
+        for code := range errorPages </span><span class="cov8" title="8">{
+                filename := filepath.Join(ErrorPagesDir, fmt.Sprintf("%d.http", code))
+                if _, err := os.Stat(filename); os.IsNotExist(err) </span><span class="cov1" title="1">{
+                        return false
+                }</span>
+        }
+        <span class="cov1" title="1">return true</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package haproxy
 
 import (
         "fmt"
@@ -1130,7 +1351,7 @@ func (g *Generator) ConfigExists(bind *models.Bind) bool <span class="cov0" titl
 }
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package haproxy
+		<pre class="file" id="file12" style="display: none">package haproxy
 
 import (
         "fmt"
@@ -1277,7 +1498,7 @@ func (i *Installer) ConfigureHAProxy() error <span class="cov0" title="0">{
 }
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">package haproxy
+		<pre class="file" id="file13" style="display: none">package haproxy
 
 import (
         "fmt"
@@ -1383,8 +1604,23 @@ func (m *Manager) regenerateMainConfig() error <span class="cov0" title="0">{
         // Read base config (up to hapctl managed section)
         baseConfig, err := os.ReadFile(baseConfigPath)
         if err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to read base config: %w", err)
-        }</span>
+                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        logger.Info("HAProxy config not found, creating default configuration")
+                        baseConfig = []byte(DefaultHAProxyConfig)
+                        if err := os.WriteFile(baseConfigPath, baseConfig, 0644); err != nil </span><span class="cov0" title="0">{
+                                return fmt.Errorf("failed to create default config: %w", err)
+                        }</span>
+
+                        <span class="cov0" title="0">if !ErrorPagesExist() </span><span class="cov0" title="0">{
+                                logger.Info("Generating HAProxy error pages")
+                                if err := GenerateErrorPages(); err != nil </span><span class="cov0" title="0">{
+                                        logger.Warn("Failed to generate error pages: %v", err)
+                                }</span>
+                        }
+                } else<span class="cov0" title="0"> {
+                        return fmt.Errorf("failed to read base config: %w", err)
+                }</span>
+        }
 
         // Find where hapctl section starts and keep only the base
         <span class="cov0" title="0">configStr := string(baseConfig)
@@ -1563,7 +1799,7 @@ func (m *Manager) cleanupDir(dir string, validBinds map[string]bool) error <span
 }
 </pre>
 		
-		<pre class="file" id="file12" style="display: none">package logger
+		<pre class="file" id="file14" style="display: none">package logger
 
 import (
         "fmt"
@@ -1732,7 +1968,7 @@ func GetTimestamp() string <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file13" style="display: none">package monitor
+		<pre class="file" id="file15" style="display: none">package monitor
 
 import (
         "bytes"
@@ -1907,7 +2143,7 @@ func (m *Monitor) sendWebhook(report *models.MonitoringReport) error <span class
 }
 </pre>
 		
-		<pre class="file" id="file14" style="display: none">package ssl
+		<pre class="file" id="file16" style="display: none">package ssl
 
 import (
         "fmt"
@@ -1969,7 +2205,7 @@ func isYAMLFile(filename string) bool <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file15" style="display: none">package ssl
+		<pre class="file" id="file17" style="display: none">package ssl
 
 import (
         "context"
@@ -2314,7 +2550,7 @@ func (m *Manager) GetCertificatePath(domain string) string <span class="cov0" ti
 }</span>
 </pre>
 		
-		<pre class="file" id="file16" style="display: none">package sync
+		<pre class="file" id="file18" style="display: none">package sync
 
 import (
         "context"
