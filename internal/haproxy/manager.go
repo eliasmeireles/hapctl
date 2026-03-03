@@ -133,6 +133,11 @@ func (m *Manager) regenerateMainConfig() error {
 	// Trim excessive trailing blank lines from base config
 	baseOnly = strings.TrimRight(baseOnly, "\n")
 
+	// Strip shell variable assignments that may have leaked into the base config
+	// from older hapctl versions that wrote configs inline before the marker existed.
+	baseOnly = stripShellVarLines(baseOnly)
+	baseOnly = strings.TrimRight(baseOnly, "\n")
+
 	// Build new config with services.d includes
 	var newConfig strings.Builder
 	newConfig.WriteString(baseOnly)
@@ -173,12 +178,13 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 	}
 
 	var configs strings.Builder
-	// Keywords that start a valid HAProxy configuration line in our generated files.
-	// We only want lines that are either:
-	// 1. A section header (frontend, backend, listen)
-	// 2. A comment starting with #
-	// 3. An indented configuration line (starting with 4 spaces)
-	sectionHeaders := []string{"frontend ", "backend ", "listen "}
+	// Specific HAProxy keywords that MUST start a valid line (after trimming whitespace)
+	validKeywords := []string{
+		"frontend", "backend", "listen", "server", "bind", "mode",
+		"option", "tcp-request", "http-request", "http-response",
+		"default_backend", "use_backend", "balance", "redirect",
+		"acl", "timeout", "retries", "maxconn",
+	}
 
 	for _, file := range files {
 		content, err := os.ReadFile(file)
@@ -189,36 +195,33 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 
 		lines := strings.Split(string(content), "\n")
 		for _, line := range lines {
-			if strings.TrimSpace(line) == "" {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
 				continue
 			}
 
+			// Always allow comments
+			if strings.HasPrefix(trimmed, "#") {
+				configs.WriteString(line)
+				configs.WriteString("\n")
+				continue
+			}
+
+			// Strict check for HAProxy keywords
 			isValid := false
-			// 1. Check for section headers (must be at the beginning of the line)
-			for _, sh := range sectionHeaders {
-				if strings.HasPrefix(line, sh) {
+			for _, kw := range validKeywords {
+				// The line must start with the keyword followed by a space or be the entire line
+				if strings.HasPrefix(trimmed, kw+" ") || trimmed == kw {
 					isValid = true
 					break
 				}
 			}
 
-			// 2. Check for comments
-			if !isValid && strings.HasPrefix(strings.TrimSpace(line), "#") {
-				isValid = true
-			}
-
-			// 3. Check for indented configuration lines (standard HAProxy style)
-			if !isValid && strings.HasPrefix(line, "    ") {
-				// Ensure it's not a variable assignment like "    var=val"
-				trimmed := strings.TrimSpace(line)
-				if !strings.Contains(trimmed, "=") || strings.Contains(trimmed, " ") {
-					isValid = true
-				}
-			}
-
 			if isValid {
-				configs.WriteString(line)
 				configs.WriteString("\n")
+				configs.WriteString(line)
+			} else {
+				logger.Debug("Filtering out invalid line from %s: %s", filepath.Base(file), line)
 			}
 		}
 	}
@@ -336,4 +339,39 @@ func (m *Manager) cleanupDir(dir string, validBinds map[string]bool) error {
 	}
 
 	return nil
+}
+
+// stripShellVarLines removes lines that look like shell variable assignments
+// (e.g., var_name="value") from a HAProxy config string. These can appear in
+// haproxy.cfg when an older version of hapctl wrote configs inline before the
+// services.d approach was introduced.
+func stripShellVarLines(content string) string {
+	lines := strings.Split(content, "\n")
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if !isShellVarLine(strings.TrimSpace(line)) {
+			result = append(result, line)
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
+// isShellVarLine returns true if the trimmed line looks like a shell variable
+// assignment such as var_name="value" or VAR=value.
+func isShellVarLine(trimmed string) bool {
+	if trimmed == "" || trimmed[0] == '#' {
+		return false
+	}
+	eqIdx := strings.IndexByte(trimmed, '=')
+	if eqIdx <= 0 {
+		return false
+	}
+	// Shell variable assignments have no spaces between the name and the = sign.
+	prefix := trimmed[:eqIdx]
+	if strings.ContainsAny(prefix, " \t") {
+		return false
+	}
+	// Must start with a letter or underscore (valid identifier start).
+	c := prefix[0]
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 }

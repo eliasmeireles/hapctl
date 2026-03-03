@@ -11,14 +11,12 @@ import (
 )
 
 const (
-	DefaultResourcePath      = "/etc/hapctl/resources"
-	DefaultSyncInterval      = 5 * time.Second
-	DefaultMonitorInterval   = 30 * time.Second
-	DefaultSSLConfigPath     = "/etc/hapctl/ssl"
-	DefaultSSLCertPath       = "/etc/haproxy/certs"
-	DefaultSSLRenewalCheck   = 12 * time.Hour
-	DefaultSyncEnabled       = true
-	DefaultMonitoringEnabled = true
+	DefaultResourcePath    = "/etc/hapctl/resources"
+	DefaultSyncInterval    = 5 * time.Second
+	DefaultMonitorInterval = 30 * time.Second
+	DefaultSSLConfigPath   = "/etc/hapctl/ssl"
+	DefaultSSLCertPath     = "/etc/haproxy/certs"
+	DefaultSSLRenewalCheck = 12 * time.Hour
 )
 
 func LoadConfig(path string) (*models.Config, error) {

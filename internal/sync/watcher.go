@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -19,6 +20,8 @@ import (
 	"github.com/eliasmeireles/hapctl/internal/models"
 )
 
+const DefaultForceRevalidate = 1
+
 type Watcher struct {
 	resourcePath string
 	interval     time.Duration
@@ -27,6 +30,7 @@ type Watcher struct {
 	watcher      *fsnotify.Watcher
 	resources    map[string]*models.BindResource
 	lastHash     string
+	syncMutex    sync.Mutex
 }
 
 type Monitor interface {
@@ -69,7 +73,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 	defer ticker.Stop()
 
 	// Forced resync ticker (5 minutes fallback)
-	forcedResyncTicker := time.NewTicker(5 * time.Minute)
+	forcedResyncTicker := time.NewTicker(DefaultForceRevalidate * time.Minute)
 	defer forcedResyncTicker.Stop()
 
 	for {
@@ -80,6 +84,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 			return nil
 
 		case event, ok := <-w.watcher.Events:
+			forcedResyncTicker.Reset(DefaultForceRevalidate * time.Minute)
 			if !ok {
 				return nil
 			}
@@ -126,6 +131,9 @@ func (w *Watcher) addWatchRecursive(path string) error {
 }
 
 func (w *Watcher) handleEvent(event fsnotify.Event) {
+	w.syncMutex.Lock()
+	defer w.syncMutex.Unlock()
+
 	logger.Debug("File event: %s %s", event.Op.String(), event.Name)
 
 	if event.Op&fsnotify.Create == fsnotify.Create {
@@ -251,6 +259,9 @@ func (w *Watcher) initialSync() error {
 }
 
 func (w *Watcher) periodicSync() error {
+	w.syncMutex.Lock()
+	defer w.syncMutex.Unlock()
+
 	logger.Debug("Performing periodic sync check")
 
 	// Calculate current hash
@@ -306,6 +317,9 @@ func (w *Watcher) periodicSync() error {
 }
 
 func (w *Watcher) forcedResync() error {
+	w.syncMutex.Lock()
+	defer w.syncMutex.Unlock()
+
 	logger.Debug("Checking if forced resync is needed")
 
 	// Calculate current hash
