@@ -55,7 +55,9 @@ func generateHAProxyConfig() error {
 		fmt.Printf("⚠️  HAProxy config already exists at: %s\n", configPath)
 		fmt.Print("Overwrite? (y/N): ")
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			response = "n"
+		}
 		if response != "y" && response != "Y" {
 			fmt.Println("Cancelled")
 			return nil

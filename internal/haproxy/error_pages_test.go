@@ -1,6 +1,7 @@
 package haproxy
 
 import (
+import "fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,8 +25,7 @@ func TestGenerateErrorPages(t *testing.T) {
 
 	expectedCodes := []int{400, 403, 408, 500, 502, 503, 504}
 	for _, code := range expectedCodes {
-		filename := filepath.Join(ErrorPagesDir, filepath.Base(filepath.Join("", string(rune(code))+"00.http")))
-		filename = filepath.Join(ErrorPagesDir, string(rune(code/100+48))+string(rune((code/10)%10+48))+string(rune(code%10+48))+".http")
+		filename := filepath.Join(ErrorPagesDir, fmt.Sprintf("%d.http", code))
 
 		content, err := os.ReadFile(filename)
 		require.NoError(t, err, "Error page %d should exist", code)
