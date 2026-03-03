@@ -32,6 +32,7 @@ type Watcher struct {
 type Monitor interface {
 	RegisterBind(bind *models.Bind)
 	UnregisterBind(bindName string)
+	ClearBinds()
 }
 
 func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager, mon Monitor) (*Watcher, error) {

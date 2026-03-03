@@ -28,6 +28,13 @@ func NewMonitor(cfg *models.MonitoringConfig) *Monitor {
 }
 
 func (m *Monitor) RegisterBind(bind *models.Bind) {
+	// Check if bind already exists to avoid duplicates
+	for _, existingBind := range m.binds {
+		if existingBind.Name == bind.Name {
+			logger.Debug("Bind %s already registered, skipping", bind.Name)
+			return
+		}
+	}
 	m.binds = append(m.binds, bind)
 	logger.Debug("Registered bind for monitoring: %s", bind.Name)
 }
@@ -40,6 +47,11 @@ func (m *Monitor) UnregisterBind(bindName string) {
 			return
 		}
 	}
+}
+
+func (m *Monitor) ClearBinds() {
+	m.binds = make([]*models.Bind, 0)
+	logger.Debug("Cleared all registered binds")
 }
 
 func (m *Monitor) Start(ctx context.Context) error {
