@@ -3,8 +3,9 @@ package haproxy
 import (
 	"testing"
 
-	"github.com/eliasmeireles/hapctl/internal/models"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eliasmeireles/hapctl/internal/models"
 )
 
 func TestGenerateBindConfig(t *testing.T) {

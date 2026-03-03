@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/eliasmeireles/hapctl/internal/models"
 	"gopkg.in/yaml.v3"
+
+	"github.com/eliasmeireles/hapctl/internal/models"
 )
 
 func LoadBindResource(path string) (*models.BindResource, error) {

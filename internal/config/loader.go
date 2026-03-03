@@ -5,8 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/eliasmeireles/hapctl/internal/models"
 	"gopkg.in/yaml.v3"
+
+	"github.com/eliasmeireles/hapctl/internal/models"
 )
 
 const (

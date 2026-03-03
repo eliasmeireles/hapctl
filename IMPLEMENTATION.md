@@ -60,6 +60,8 @@ hapctl/
    - `hapctl agent` - Start sync + monitoring agent
    - `hapctl apply -f <file>` - Apply bind configuration
    - `hapctl validate -f <file>` - Validate configuration
+   - `hapctl install` - Install HAProxy on the system
+   - `hapctl install --check` - Check if HAProxy is installed
    - `--config` flag for custom config path
 
 2. **File Synchronization**
@@ -90,6 +92,12 @@ hapctl/
    - 100MB max file size
    - Compression of old logs
    - Separate monitoring log
+
+6. **HAProxy Installation**
+   - Automatic detection if HAProxy is installed
+   - Built-in installer for Linux systems
+   - Supports apt, yum, and dnf package managers
+   - Agent checks for HAProxy before starting
 
 ### ✅ Configuration Format
 

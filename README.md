@@ -13,6 +13,14 @@ HAProxy Control CLI and Agent - A tool to manage HAProxy configurations dynamica
 - **Health Monitoring**: Periodic health checks for configured binds with webhook notifications
 - **CLI Interface**: Manage configurations through command-line interface
 - **Logging**: Comprehensive logging with automatic rotation (7-day retention)
+- **HAProxy Installation**: Built-in installer for HAProxy on Linux systems
+
+## Prerequisites
+
+- **HAProxy**: Required for the agent to function
+  - Can be installed automatically using `sudo hapctl install`
+  - Supports apt (Debian/Ubuntu), yum (CentOS/RHEL), and dnf (Fedora)
+  - Or install manually: `sudo apt-get install haproxy` (Debian/Ubuntu)
 
 ## Installation
 
@@ -27,6 +35,16 @@ make build
 ```
 
 ## Usage
+
+### Install HAProxy (if not already installed)
+
+```bash
+# Check if HAProxy is installed
+hapctl install --check
+
+# Install HAProxy (requires sudo)
+sudo hapctl install
+```
 
 ### Start the agent (sync + monitor)
 
@@ -93,4 +111,3 @@ binds:
 - `internal/sync`: File watching and synchronization service
 - `internal/monitor`: Health monitoring and webhook notifications
 - `internal/logger`: Logging system with rotation
-

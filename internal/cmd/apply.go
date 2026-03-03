@@ -1,10 +1,11 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/eliasmeireles/hapctl/internal/config"
 	"github.com/eliasmeireles/hapctl/internal/haproxy"
 	"github.com/eliasmeireles/hapctl/internal/logger"
-	"github.com/spf13/cobra"
 )
 
 var (

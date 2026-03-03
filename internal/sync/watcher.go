@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/eliasmeireles/hapctl/internal/config"
 	"github.com/eliasmeireles/hapctl/internal/haproxy"
 	"github.com/eliasmeireles/hapctl/internal/logger"
 	"github.com/eliasmeireles/hapctl/internal/models"
-	"github.com/fsnotify/fsnotify"
 )
 
 type Watcher struct {

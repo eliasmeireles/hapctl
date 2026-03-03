@@ -2,16 +2,18 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/spf13/cobra"
 
 	"github.com/eliasmeireles/hapctl/internal/config"
 	"github.com/eliasmeireles/hapctl/internal/haproxy"
 	"github.com/eliasmeireles/hapctl/internal/logger"
 	"github.com/eliasmeireles/hapctl/internal/monitor"
 	"github.com/eliasmeireles/hapctl/internal/sync"
-	"github.com/spf13/cobra"
 )
 
 var agentCmd = &cobra.Command{
@@ -30,6 +32,11 @@ func init() {
 }
 
 func runAgent(cmd *cobra.Command, args []string) {
+	installer := haproxy.NewInstaller()
+	if !installer.IsInstalled() {
+		exitWithError("HAProxy is not installed", fmt.Errorf("please install HAProxy first using: sudo hapctl install"))
+	}
+
 	cfg, err := config.LoadConfig(cfgFile)
 	if err != nil {
 		exitWithError("Failed to load config", err)
