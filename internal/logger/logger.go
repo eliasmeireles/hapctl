@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	DefaultLogPath       = "/var/log/hapctl/hapctl.log"
-	DefaultMaxSize       = 100
-	DefaultMaxBackups    = 7
-	DefaultMaxAge        = 7
-	DefaultCompress      = true
+	DefaultLogPath    = "/var/log/hapctl/hapctl.log"
+	FallbackLogPath   = ".hapctl/log/hapctl.log"
+	DefaultMaxSize    = 100
+	DefaultMaxBackups = 7
+	DefaultMaxAge     = 7
+	DefaultCompress   = true
 )
 
 type Logger struct {
@@ -34,7 +35,22 @@ func Init(logPath string) error {
 
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			log.Printf("[WARNING] Failed to create log directory %s: %v. Could not determine home directory: %v", logDir, err, homeErr)
+			return fmt.Errorf("failed to create log directory: %w", err)
+		}
+
+		fallbackPath := filepath.Join(homeDir, FallbackLogPath)
+		fallbackDir := filepath.Dir(fallbackPath)
+
+		log.Printf("[WARNING] Failed to create log directory %s: %v. Using fallback: %s", logDir, err, fallbackPath)
+
+		if err := os.MkdirAll(fallbackDir, 0755); err != nil {
+			return fmt.Errorf("failed to create fallback log directory: %w", err)
+		}
+
+		logPath = fallbackPath
 	}
 
 	logWriter := &lumberjack.Logger{
@@ -92,7 +108,22 @@ func LogMonitoring(logPath string, report interface{}) error {
 
 	logDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create monitoring log directory: %w", err)
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			log.Printf("[WARNING] Failed to create monitoring log directory %s: %v. Could not determine home directory: %v", logDir, err, homeErr)
+			return fmt.Errorf("failed to create monitoring log directory: %w", err)
+		}
+
+		fallbackPath := filepath.Join(homeDir, ".hapctl/log/monitoring.log")
+		fallbackDir := filepath.Dir(fallbackPath)
+
+		log.Printf("[WARNING] Failed to create monitoring log directory %s: %v. Using fallback: %s", logDir, err, fallbackPath)
+
+		if err := os.MkdirAll(fallbackDir, 0755); err != nil {
+			return fmt.Errorf("failed to create fallback monitoring log directory: %w", err)
+		}
+
+		logPath = fallbackPath
 	}
 
 	logWriter := &lumberjack.Logger{
