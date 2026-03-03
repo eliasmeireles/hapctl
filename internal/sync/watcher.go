@@ -2,9 +2,13 @@ package sync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -21,6 +25,7 @@ type Watcher struct {
 	manager      *haproxy.Manager
 	watcher      *fsnotify.Watcher
 	resources    map[string]*models.BindResource
+	lastHash     string
 }
 
 func NewWatcher(cfg *models.SyncConfig, manager *haproxy.Manager) (*Watcher, error) {
@@ -45,12 +50,19 @@ func (w *Watcher) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to add watch path: %w", err)
 	}
 
+	// Execute initial sync on startup
+	logger.Info("Performing initial sync")
 	if err := w.initialSync(); err != nil {
 		logger.Error("Initial sync failed: %v", err)
 	}
 
+	// Periodic sync ticker (configurable interval)
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
+
+	// Forced resync ticker (5 minutes fallback)
+	forcedResyncTicker := time.NewTicker(5 * time.Minute)
+	defer forcedResyncTicker.Stop()
 
 	for {
 		select {
@@ -74,6 +86,12 @@ func (w *Watcher) Start(ctx context.Context) error {
 		case <-ticker.C:
 			if err := w.periodicSync(); err != nil {
 				logger.Error("Periodic sync failed: %v", err)
+			}
+
+		case <-forcedResyncTicker.C:
+			logger.Info("Forced resync (5-minute fallback)")
+			if err := w.forcedResync(); err != nil {
+				logger.Error("Forced resync failed: %v", err)
 			}
 		}
 	}
@@ -160,6 +178,15 @@ func (w *Watcher) syncFile(path string) {
 	}
 
 	w.resources[path] = resource
+
+	// Update hash after successful sync
+	newHash, err := w.calculateResourcesHash()
+	if err != nil {
+		logger.Error("Failed to calculate hash: %v", err)
+	} else {
+		w.lastHash = newHash
+	}
+
 	logger.Info("Successfully synced resource from %s", path)
 }
 
@@ -186,6 +213,20 @@ func (w *Watcher) initialSync() error {
 func (w *Watcher) periodicSync() error {
 	logger.Debug("Performing periodic sync check")
 
+	// Calculate current hash
+	currentHash, err := w.calculateResourcesHash()
+	if err != nil {
+		logger.Error("Failed to calculate hash: %v", err)
+	}
+
+	// If hash hasn't changed, skip sync entirely
+	if currentHash != "" && currentHash == w.lastHash {
+		logger.Debug("No changes detected (hash match), skipping periodic sync")
+		return nil
+	}
+
+	logger.Debug("Hash changed, performing sync")
+
 	resources, err := config.LoadBindResourcesFromDir(w.resourcePath)
 	if err != nil {
 		return err
@@ -198,15 +239,97 @@ func (w *Watcher) periodicSync() error {
 		}
 	}
 
-	// Sync all files (new and existing) to catch changes like enabled: false
+	// Apply all resources (hash already changed, so we need to sync)
+	for path, resource := range resources {
+		if err := w.manager.ApplyBindResource(resource); err != nil {
+			logger.Error("Failed to apply resource from %s: %v", path, err)
+			continue
+		}
+		w.resources[path] = resource
+		logger.Info("Successfully synced resource from %s", path)
+	}
+
+	// Cleanup orphaned hapctl- configs
+	if err := w.manager.CleanupOrphanedConfigs(resources); err != nil {
+		logger.Error("Failed to cleanup orphaned configs: %v", err)
+	}
+
+	w.lastHash = currentHash
+	return nil
+}
+
+func (w *Watcher) forcedResync() error {
+	logger.Info("Performing forced full resync")
+
+	resources, err := config.LoadBindResourcesFromDir(w.resourcePath)
+	if err != nil {
+		return err
+	}
+
+	// Remove binds for files that no longer exist
+	for path := range w.resources {
+		if _, exists := resources[path]; !exists {
+			logger.Info("Removing stale resource: %s", path)
+			w.handleRemove(path)
+		}
+	}
+
+	// Force sync all files
 	for path := range resources {
+		logger.Debug("Force syncing: %s", path)
 		w.syncFile(path)
 	}
 
+	// Cleanup orphaned hapctl- configs
+	logger.Debug("Checking for orphaned configs")
+	if err := w.manager.CleanupOrphanedConfigs(resources); err != nil {
+		logger.Error("Failed to cleanup orphaned configs: %v", err)
+	}
+
+	logger.Info("Forced resync completed, processed %d resources", len(resources))
 	return nil
 }
 
 func isYAMLFile(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".yaml" || ext == ".yml"
+}
+
+func (w *Watcher) calculateResourcesHash() (string, error) {
+	var files []string
+
+	err := filepath.Walk(w.resourcePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && isYAMLFile(path) {
+			files = append(files, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	// Sort files for consistent hash
+	sort.Strings(files)
+
+	hasher := sha256.New()
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			logger.Error("Failed to open file for hashing: %s: %v", file, err)
+			continue
+		}
+
+		if _, err := io.Copy(hasher, f); err != nil {
+			f.Close()
+			logger.Error("Failed to hash file: %s: %v", file, err)
+			continue
+		}
+		f.Close()
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

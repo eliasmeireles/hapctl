@@ -109,6 +109,9 @@ func (m *Manager) regenerateMainConfig() error {
 		baseOnly = configStr[:idx]
 	}
 
+	// Trim excessive trailing blank lines from base config
+	baseOnly = strings.TrimRight(baseOnly, "\n")
+
 	// Build new config with services.d includes
 	var newConfig strings.Builder
 	newConfig.WriteString(baseOnly)
@@ -194,4 +197,67 @@ func (m *Manager) ApplyBindResource(resource *models.BindResource) error {
 
 func (m *Manager) GenerateBindConfig(bind *models.Bind) (string, error) {
 	return m.generator.GenerateBindConfig(bind)
+}
+
+func (m *Manager) CleanupOrphanedConfigs(resources map[string]*models.BindResource) error {
+	// Get all bind names from resources
+	validBinds := make(map[string]bool)
+	for _, resource := range resources {
+		for _, bind := range resource.Binds {
+			validBinds[bind.Name] = true
+		}
+	}
+
+	// Check HTTP configs
+	httpDir := filepath.Join(DefaultHAProxyConfigDir, DefaultServicesDir, HTTPServicesDir)
+	if err := m.cleanupDir(httpDir, validBinds); err != nil {
+		return err
+	}
+
+	// Check TCP configs
+	tcpDir := filepath.Join(DefaultHAProxyConfigDir, DefaultServicesDir, TCPServicesDir)
+	if err := m.cleanupDir(tcpDir, validBinds); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) cleanupDir(dir string, validBinds map[string]bool) error {
+	files, err := filepath.Glob(filepath.Join(dir, "*.cfg"))
+	if err != nil {
+		return err
+	}
+
+	needsReload := false
+	for _, file := range files {
+		filename := filepath.Base(file)
+
+		// Only process hapctl- prefixed files
+		if !strings.HasPrefix(filename, NamePrefix) {
+			continue
+		}
+
+		// Extract bind name (remove hapctl- prefix and .cfg suffix)
+		bindName := strings.TrimPrefix(filename, NamePrefix)
+		bindName = strings.TrimSuffix(bindName, ".cfg")
+
+		// If bind not in valid resources, remove it
+		if !validBinds[bindName] {
+			logger.Info("Removing orphaned config: %s", filename)
+			if err := os.Remove(file); err != nil {
+				logger.Error("Failed to remove orphaned config %s: %v", filename, err)
+			} else {
+				needsReload = true
+			}
+		}
+	}
+
+	// Reload HAProxy if we removed any configs
+	if needsReload {
+		logger.Info("Orphaned configs removed, reloading HAProxy")
+		return m.ReloadHAProxy()
+	}
+
+	return nil
 }
