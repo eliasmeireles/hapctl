@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -62,6 +63,10 @@ func generateHAProxyConfig() error {
 			fmt.Println("Cancelled")
 			return nil
 		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	if err := os.WriteFile(configPath, []byte(haproxy.DefaultHAProxyConfig), 0644); err != nil {

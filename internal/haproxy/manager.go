@@ -101,6 +101,11 @@ func (m *Manager) regenerateMainConfig() error {
 	baseConfigPath := "/etc/haproxy/haproxy.cfg"
 	backupPath := "/etc/haproxy/haproxy.cfg.backup"
 
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(baseConfigPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
 	// Read base config (up to hapctl managed section)
 	baseConfig, err := os.ReadFile(baseConfigPath)
 	if err != nil {
