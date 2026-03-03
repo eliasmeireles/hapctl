@@ -98,9 +98,10 @@ prepare_volume() {
     mkdir -p "$VOLUMES_DIR"
     mkdir -p "$VOLUMES_DIR/resources"
 
-    # Build hapctl
+    # Build hapctl and webhook-test
     cd "$PROJECT_ROOT"
     make build
+    make build-webhook-test
 
     # Copy files to volume (configs and examples only)
     cp "$SCRIPT_DIR/config.yaml" "$VOLUMES_DIR/"
@@ -131,6 +132,20 @@ install_hapctl() {
     multipass exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/hapctl
 
     echo "✅ hapctl binary installed to /usr/local/bin"
+}
+
+install_webhook_test() {
+    echo ""
+    echo "Installing webhook-test binary..."
+
+    # Copy webhook-test binary to VM
+    multipass transfer "$PROJECT_ROOT/bin/webhook-test" "$VM_NAME:/tmp/webhook-test"
+
+    # Install to /usr/local/bin
+    multipass exec "$VM_NAME" -- sudo mv /tmp/webhook-test /usr/local/bin/webhook-test
+    multipass exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/webhook-test
+
+    echo "✅ webhook-test binary installed to /usr/local/bin"
 }
 
 install_haproxy() {
@@ -252,6 +267,7 @@ main() {
     wait_for_vm
     mount_volume
     install_hapctl
+    install_webhook_test
     install_haproxy
     setup_haproxy_config
     setup_systemd_service
