@@ -89,10 +89,20 @@ func (m *Manager) RemoveBindWithoutReload(bind *models.Bind) error {
 }
 
 func (m *Manager) ValidateConfig() error {
+	// Check if haproxy is available
+	if _, err := exec.LookPath("haproxy"); err != nil {
+		logger.Warn("HAProxy binary not found in PATH, skipping validation")
+		logger.Warn("Config will be written but not validated")
+		return nil
+	}
+
 	cmd := exec.Command("haproxy", "-c", "-f", "/etc/haproxy/haproxy.cfg")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("validation failed: %s", string(output))
+		if len(output) > 0 {
+			return fmt.Errorf("validation failed: %s", string(output))
+		}
+		return fmt.Errorf("validation failed: %w", err)
 	}
 	return nil
 }
@@ -229,6 +239,8 @@ func (m *Manager) readServiceConfigs(dir string) (string, error) {
 				logger.Debug("Filtering out invalid line from %s: %s", filepath.Base(file), line)
 			}
 		}
+		// Add newline after each config file to separate them
+		configs.WriteString("\n")
 	}
 
 	return configs.String(), nil
@@ -241,10 +253,20 @@ func (m *Manager) ReloadHAProxy() error {
 		return fmt.Errorf("failed to regenerate config: %w", err)
 	}
 
+	// Check if systemctl is available (Linux only)
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		logger.Warn("systemctl not found, skipping HAProxy reload")
+		logger.Warn("Running in development mode - configs written but service not reloaded")
+		return nil
+	}
+
 	cmd := exec.Command("systemctl", "reload", "haproxy")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("reload failed: %s", string(output))
+		if len(output) > 0 {
+			return fmt.Errorf("reload failed: %s", string(output))
+		}
+		return fmt.Errorf("reload failed: %w", err)
 	}
 
 	// Check HAProxy status
