@@ -51,24 +51,24 @@ create_vm() {
         exit 1
     fi
 
-    # Validate YAML syntax
-    if command -v python3 &> /dev/null; then
-        if ! python3 -c "import yaml; yaml.safe_load(open('$CLOUD_INIT_FILE'))" 2>/dev/null; then
-            echo "❌ Invalid YAML syntax in cloud-init file"
-            cat "$CLOUD_INIT_FILE"
-            exit 1
-        fi
-    fi
-
     echo "Cloud-init file generated at: $CLOUD_INIT_FILE"
+
+    # Detect architecture for macOS ARM compatibility
+    ARCH=$(uname -m)
+    UBUNTU_IMAGE="22.04"
+
+    if [[ "$OSTYPE" == "darwin"* ]] && [[ "$ARCH" == "arm64" ]]; then
+        echo "Detected macOS ARM64 - using ARM-compatible Ubuntu image"
+    fi
 
     multipass launch \
         --name "$VM_NAME" \
         --cpus 2 \
         --memory 2G \
         --disk 10G \
+        --mount "$VOLUMES_DIR:/home/ubuntu/hapctl" \
         --cloud-init "$CLOUD_INIT_FILE" \
-        22.04
+        "$UBUNTU_IMAGE"
 
     echo "✅ VM created successfully"
 }
@@ -84,7 +84,7 @@ wait_for_vm() {
             return 0
         fi
         echo "Waiting... ($i/30)"
-        sleep 2
+        sleep 5
     done
 
     echo "❌ VM did not become ready in time"
@@ -112,16 +112,6 @@ prepare_volume() {
     cp "$SCRIPT_DIR/configure-ssl.sh" "$VOLUMES_DIR/"
 
     echo "✅ Volume prepared at: $VOLUMES_DIR"
-}
-
-mount_volume() {
-    echo ""
-    echo "Mounting volume to VM..."
-
-    # Mount the volume
-    multipass mount "$VOLUMES_DIR" "$VM_NAME:/home/ubuntu/hapctl"
-
-    echo "✅ Volume mounted"
 }
 
 install_hapctl() {
@@ -300,39 +290,72 @@ main() {
     check_multipass
     get_ssh_key
 
+    VM_EXISTS=false
     if multipass list | grep -q "$VM_NAME"; then
+        VM_EXISTS=true
         echo ""
         echo "⚠️  VM '$VM_NAME' already exists"
-        read -p "Do you want to delete and recreate it? (y/N): " -n 1 -r
+        echo ""
+        echo "Options:"
+        echo "  1) Configure existing VM (update binaries and configs)"
+        echo "  2) Delete and recreate VM"
+        echo "  3) Abort"
+        echo ""
+        read -p "Choose option (1/2/3): " -n 1 -r
         echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            multipass delete "$VM_NAME"
-            multipass purge
-        else
-            echo "Aborted"
-            exit 0
-        fi
+
+        case $REPLY in
+            1)
+                echo "Configuring existing VM..."
+                ;;
+            2)
+                echo "Deleting and recreating VM..."
+                multipass delete "$VM_NAME"
+                multipass purge
+                VM_EXISTS=false
+                ;;
+            *)
+                echo "Aborted"
+                exit 0
+                ;;
+        esac
     fi
 
     prepare_volume
-    create_vm
-    wait_for_vm
-    mount_volume
+
+    if [ "$VM_EXISTS" = false ]; then
+        create_vm
+        wait_for_vm
+    fi
+
     install_hapctl
     install_webhook_test
-    install_haproxy
-    start_docker_containers
-    setup_haproxy_config
-    setup_ssl
-    setup_systemd_service
 
-    # Start agent to generate configs
-    echo ""
-    echo "Starting hapctl agent to generate initial configs..."
-    multipass exec "$VM_NAME" -- sudo systemctl start hapctl-agent
+    if [ "$VM_EXISTS" = false ]; then
+        install_haproxy
+        start_docker_containers
+        setup_haproxy_config
+        setup_ssl
+        setup_systemd_service
+    else
+        echo ""
+        echo "Restarting Docker containers..."
+        multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/hapctl && docker compose restart"
 
-    # Configure SSL after configs are generated
-    configure_ssl_haproxy
+        echo ""
+        echo "Restarting hapctl agent..."
+        multipass exec "$VM_NAME" -- sudo systemctl restart hapctl-agent
+    fi
+
+    # Start agent to generate configs (for new VMs)
+    if [ "$VM_EXISTS" = false ]; then
+        echo ""
+        echo "Starting hapctl agent to generate initial configs..."
+        multipass exec "$VM_NAME" -- sudo systemctl start hapctl-agent
+
+        # Configure SSL after configs are generated
+        configure_ssl_haproxy
+    fi
 
     show_info
 }
