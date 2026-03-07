@@ -2,7 +2,7 @@
 
 set -e
 
-CERT_DIR="/home/ubuntu/traefik/traefik/certs"
+CERT_DIR="/home/ubuntu/traefik/certs"
 
 echo "Generating self-signed SSL certificate..."
 

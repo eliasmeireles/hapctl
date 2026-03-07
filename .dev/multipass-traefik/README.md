@@ -4,13 +4,14 @@ This setup provides a complete Traefik-based load balancer environment using Mul
 
 ## Features
 
-- **Traefik v2.10** as reverse proxy and load balancer
+- **Traefik v2.10.7** installed as native binary (systemd service)
 - **Automatic HTTPS** with self-signed certificates
 - **HTTP to HTTPS redirect** on port 80
-- **Load balancing** between two nginx applications
+- **Load balancing** between two HTTP test applications
 - **Traefik Dashboard** for monitoring
-- **Docker-based** backend applications
+- **Native installation** (no Docker required)
 - **File-based configuration** with hot reload
+- **Systemd integration** for service management
 
 ## Prerequisites
 
@@ -34,22 +35,24 @@ The script will:
 ## Architecture
 
 ```
-                    ┌─────────────────┐
-                    │   Multipass VM  │
-                    │  traefik-dev    │
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │     Traefik     │
-                    │   Port 80/443   │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │                             │
-      ┌───────▼────────┐          ┌────────▼───────┐
-      │  nginx-app1    │          │  nginx-app2    │
-      │  Port 8080     │          │  Port 8081     │
-      └────────────────┘          └────────────────┘
+                    ┌─────────────────────────────┐
+                    │      Multipass VM           │
+                    │      traefik-dev            │
+                    │                             │
+                    │  ┌──────────────────────┐   │
+                    │  │  Traefik (systemd)   │   │
+                    │  │  /usr/local/bin      │   │
+                    │  │  Port 80/443         │   │
+                    │  └──────────┬───────────┘   │
+                    │             │               │
+                    │  ┌──────────┴──────────┐    │
+                    │  │                     │    │
+                    │  ▼                     ▼    │
+                    │ ┌──────────┐   ┌──────────┐│
+                    │ │ HTTP App1│   │ HTTP App2││
+                    │ │ Port 8080│   │ Port 8081││
+                    │ └──────────┘   └──────────┘│
+                    └─────────────────────────────┘
 ```
 
 ## Access Points
@@ -58,9 +61,9 @@ After setup completes, you'll have access to:
 
 - **HTTP**: `http://<VM_IP>:80` (redirects to HTTPS)
 - **HTTPS**: `https://<VM_IP>:443` (load balanced)
-- **Traefik Dashboard**: `http://<VM_IP>:8888`
-- **App 1 Direct**: `http://<VM_IP>:8080`
-- **App 2 Direct**: `http://<VM_IP>:8081`
+- **Traefik Dashboard**: `http://<VM_IP>:8080` (Traefik API)
+- **App 1 Direct**: `http://<VM_IP>:8080` (Python HTTP server)
+- **App 2 Direct**: `http://<VM_IP>:8081` (Python HTTP server)
 
 ## Configuration Files
 
@@ -69,19 +72,20 @@ Main Traefik static configuration:
 - Entry points (HTTP/HTTPS)
 - TLS settings
 - Logging configuration
-- Provider settings (Docker + File)
+- File provider settings (no Docker)
 
 ### `dynamic-config.yml`
 Dynamic configuration for:
 - Middlewares (redirects, security headers, rate limiting)
 - Default load balancer service
+- Backend servers (127.0.0.1:8080, 127.0.0.1:8081)
 - Health checks
 
-### `docker-compose.yml`
-Defines:
-- Traefik container with dashboard
-- Two nginx backend applications
-- Docker labels for automatic service discovery
+### `traefik.service`
+Systemd service unit file:
+- Runs Traefik as a system service
+- Auto-restart on failure
+- Security hardening options
 
 ## SSL Certificates
 
@@ -105,10 +109,11 @@ Access the dashboard at `http://<VM_IP>:8888` to view:
 
 ## Load Balancing
 
-Traefik automatically load balances requests between both nginx applications using:
+Traefik load balances requests between both HTTP applications using:
 - **Algorithm**: Round-robin (default)
 - **Health checks**: Every 10 seconds on `/health` endpoint
-- **Sticky sessions**: Disabled (can be enabled via labels)
+- **Backends**: 127.0.0.1:8080 and 127.0.0.1:8081
+- **Sticky sessions**: Disabled (can be enabled via configuration)
 
 ## Dynamic Configuration
 
@@ -129,15 +134,16 @@ multipass delete traefik-dev             # Delete VM
 multipass purge                          # Remove deleted VMs
 ```
 
-### Docker Management
+### Traefik Service Management
 ```bash
-# Inside VM or via exec
-docker compose logs traefik -f           # View Traefik logs
-docker compose logs nginx-app1 -f        # View app1 logs
-docker compose restart traefik           # Restart Traefik
-docker compose ps                        # List containers
-docker compose down                      # Stop all containers
-docker compose up -d                     # Start all containers
+# Inside VM or via multipass exec
+sudo systemctl status traefik            # Check Traefik status
+sudo systemctl restart traefik           # Restart Traefik
+sudo systemctl stop traefik              # Stop Traefik
+sudo systemctl start traefik             # Start Traefik
+sudo journalctl -u traefik -f            # View Traefik logs (follow)
+sudo journalctl -u traefik --since today # View today's logs
+traefik version                          # Check Traefik version
 ```
 
 ### Testing Load Balancing
@@ -150,16 +156,10 @@ for i in {1..10}; do curl -k https://<VM_IP>; done
 
 ### Add More Backend Services
 
-1. Add service to `docker-compose.yml`:
-```yaml
-nginx-app3:
-  image: nginx:alpine
-  networks:
-    - traefik-network
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.app3.rule=PathPrefix(`/app3`)"
-    - "traefik.http.services.app3.loadbalancer.server.port=80"
+1. Start a new HTTP server on a different port (e.g., 8082):
+```bash
+cd /home/ubuntu/traefik/html/app3
+python3 -m http.server 8082 &
 ```
 
 2. Update `dynamic-config.yml` to include in load balancer:
@@ -168,8 +168,12 @@ services:
   load-balancer:
     loadBalancer:
       servers:
-        - url: "http://nginx-app3:80"
+        - url: "http://127.0.0.1:8080"
+        - url: "http://127.0.0.1:8081"
+        - url: "http://127.0.0.1:8082"
 ```
+
+3. Traefik will automatically reload the configuration
 
 ### Enable Let's Encrypt (Production)
 
@@ -200,7 +204,13 @@ http:
 
 ### Check Traefik Logs
 ```bash
-multipass exec traefik-dev -- docker compose logs traefik
+multipass exec traefik-dev -- sudo journalctl -u traefik -n 100
+multipass exec traefik-dev -- sudo tail -f /var/log/traefik/traefik.log
+```
+
+### Check Traefik Status
+```bash
+multipass exec traefik-dev -- sudo systemctl status traefik
 ```
 
 ### Verify Certificate
@@ -208,26 +218,35 @@ multipass exec traefik-dev -- docker compose logs traefik
 openssl s_client -connect <VM_IP>:443 -servername localhost
 ```
 
-### Check Container Health
+### Check Backend Applications
 ```bash
-multipass exec traefik-dev -- docker ps
+multipass exec traefik-dev -- curl http://127.0.0.1:8080
+multipass exec traefik-dev -- curl http://127.0.0.1:8081
 ```
 
-### Restart Everything
+### Restart Traefik
 ```bash
-multipass exec traefik-dev -- bash -c "cd /home/ubuntu/traefik && docker compose restart"
+multipass exec traefik-dev -- sudo systemctl restart traefik
+```
+
+### Validate Configuration
+```bash
+multipass exec traefik-dev -- traefik version
+multipass exec traefik-dev -- cat /etc/traefik/traefik.yml
 ```
 
 ## Comparison: Traefik vs HAProxy
 
-| Feature | Traefik | HAProxy |
-|---------|---------|---------|
-| Configuration | YAML/Labels | Text-based |
-| Auto-discovery | Yes (Docker) | No |
-| Dashboard | Built-in | External |
-| Let's Encrypt | Native | Manual |
-| Learning Curve | Medium | Steep |
-| Performance | Good | Excellent |
+| Feature        | Traefik        | HAProxy         |
+| -------------- | -------------- | --------------- |
+| Configuration  | YAML           | Text-based      |
+| Installation   | Single binary  | Package manager |
+| Dashboard      | Built-in       | External        |
+| Let's Encrypt  | Native support | Manual setup    |
+| Hot reload     | Automatic      | Manual reload   |
+| Learning Curve | Medium         | Steep           |
+| Performance    | Good           | Excellent       |
+| File watching  | Yes            | No              |
 
 ## Clean Up
 

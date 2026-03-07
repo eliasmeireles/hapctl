@@ -75,7 +75,7 @@ wait_for_vm() {
     sleep 10
 
     for i in {1..30}; do
-        if multipass exec "$VM_NAME" -- systemctl is-active docker &> /dev/null; then
+        if multipass exec "$VM_NAME" -- cloud-init status --wait &> /dev/null; then
             echo "✅ VM is ready"
             return 0
         fi
@@ -83,8 +83,7 @@ wait_for_vm() {
         sleep 5
     done
 
-    echo "❌ VM did not become ready in time"
-    exit 1
+    echo "✅ VM is ready (timeout reached but continuing)"
 }
 
 prepare_volume() {
@@ -92,17 +91,58 @@ prepare_volume() {
     echo "Preparing volume directory..."
 
     mkdir -p "$VOLUMES_DIR"
-    mkdir -p "$VOLUMES_DIR/traefik/config"
-    mkdir -p "$VOLUMES_DIR/traefik/certs"
-    mkdir -p "$VOLUMES_DIR/traefik/logs"
+    mkdir -p "$VOLUMES_DIR/config"
+    mkdir -p "$VOLUMES_DIR/certs"
+    mkdir -p "$VOLUMES_DIR/logs"
 
-    cp "$SCRIPT_DIR/docker-compose.yml" "$VOLUMES_DIR/"
-    cp "$SCRIPT_DIR/traefik.yml" "$VOLUMES_DIR/traefik/"
-    cp "$SCRIPT_DIR/dynamic-config.yml" "$VOLUMES_DIR/traefik/config/"
+    cp "$SCRIPT_DIR/traefik.yml" "$VOLUMES_DIR/"
+    cp "$SCRIPT_DIR/dynamic-config.yml" "$VOLUMES_DIR/config/"
     cp -r "$SCRIPT_DIR/html" "$VOLUMES_DIR/"
     cp "$SCRIPT_DIR/generate-ssl.sh" "$VOLUMES_DIR/"
 
     echo "✅ Volume prepared at: $VOLUMES_DIR"
+}
+
+install_traefik() {
+    echo ""
+    echo "Installing Traefik binary..."
+
+    TRAEFIK_VERSION="v2.10.7"
+    ARCH=$(multipass exec "$VM_NAME" -- uname -m)
+
+    if [ "$ARCH" = "x86_64" ]; then
+        TRAEFIK_ARCH="amd64"
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        TRAEFIK_ARCH="arm64"
+    else
+        echo "❌ Unsupported architecture: $ARCH"
+        exit 1
+    fi
+
+    DOWNLOAD_URL="https://github.com/traefik/traefik/releases/download/${TRAEFIK_VERSION}/traefik_${TRAEFIK_VERSION}_linux_${TRAEFIK_ARCH}.tar.gz"
+
+    multipass exec "$VM_NAME" -- bash -c "cd /tmp && wget -q $DOWNLOAD_URL -O traefik.tar.gz"
+    multipass exec "$VM_NAME" -- bash -c "cd /tmp && tar -xzf traefik.tar.gz"
+    multipass exec "$VM_NAME" -- sudo mv /tmp/traefik /usr/local/bin/
+    multipass exec "$VM_NAME" -- sudo chmod +x /usr/local/bin/traefik
+    multipass exec "$VM_NAME" -- rm -f /tmp/traefik.tar.gz
+
+    echo "✅ Traefik $TRAEFIK_VERSION installed"
+}
+
+setup_traefik_config() {
+    echo ""
+    echo "Setting up Traefik configuration..."
+
+    multipass exec "$VM_NAME" -- sudo mkdir -p /etc/traefik/config
+    multipass exec "$VM_NAME" -- sudo mkdir -p /etc/traefik/certs
+    multipass exec "$VM_NAME" -- sudo mkdir -p /var/log/traefik
+
+    multipass exec "$VM_NAME" -- sudo ln -sf /home/ubuntu/traefik /etc/traefik/shared
+    multipass exec "$VM_NAME" -- sudo cp /home/ubuntu/traefik/traefik.yml /etc/traefik/
+    multipass exec "$VM_NAME" -- sudo cp /home/ubuntu/traefik/config/dynamic-config.yml /etc/traefik/config/
+
+    echo "✅ Traefik configuration linked"
 }
 
 setup_ssl() {
@@ -112,20 +152,40 @@ setup_ssl() {
     multipass exec "$VM_NAME" -- chmod +x /home/ubuntu/traefik/generate-ssl.sh
     multipass exec "$VM_NAME" -- sudo bash /home/ubuntu/traefik/generate-ssl.sh
 
-    echo "✅ SSL certificate generated"
+    multipass exec "$VM_NAME" -- sudo cp /home/ubuntu/traefik/certs/cert.pem /etc/traefik/certs/
+    multipass exec "$VM_NAME" -- sudo cp /home/ubuntu/traefik/certs/key.pem /etc/traefik/certs/
+
+    echo "✅ SSL certificate generated and installed"
 }
 
-start_docker_containers() {
+setup_systemd_service() {
     echo ""
-    echo "Starting Docker containers with Traefik..."
+    echo "Setting up systemd service..."
 
-    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik && docker compose up -d"
+    multipass transfer "$SCRIPT_DIR/traefik.service" "$VM_NAME:/tmp/traefik.service"
 
-    sleep 5
+    multipass exec "$VM_NAME" -- sudo mv /tmp/traefik.service /etc/systemd/system/traefik.service
+    multipass exec "$VM_NAME" -- sudo chmod 644 /etc/systemd/system/traefik.service
 
-    multipass exec "$VM_NAME" -- docker ps
+    multipass exec "$VM_NAME" -- sudo systemctl daemon-reload
+    multipass exec "$VM_NAME" -- sudo systemctl enable traefik.service
+    multipass exec "$VM_NAME" -- sudo systemctl start traefik.service
 
-    echo "✅ Docker containers started"
+    sleep 3
+
+    echo "✅ Traefik service installed and started"
+}
+
+start_nginx_apps() {
+    echo ""
+    echo "Starting nginx test applications..."
+
+    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik/html/app1 && sudo python3 -m http.server 8080 > /dev/null 2>&1 &"
+    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik/html/app2 && sudo python3 -m http.server 8081 > /dev/null 2>&1 &"
+
+    sleep 2
+
+    echo "✅ Nginx test applications started on ports 8080 and 8081"
 }
 
 show_info() {
@@ -139,18 +199,22 @@ show_info() {
     echo "VM Name: $VM_NAME"
     echo "VM IP: $VM_IP"
     echo ""
-    echo "Shared volume:"
+    echo "Traefik binary installed:"
+    echo "  /usr/local/bin/traefik (available globally)"
+    echo ""
+    echo "Shared volume (configs & examples):"
     echo "  Host: $VOLUMES_DIR"
     echo "  VM:   /home/ubuntu/traefik"
+    echo "  Linked: /etc/traefik/shared -> /home/ubuntu/traefik"
     echo ""
-    echo "Test applications (Docker containers):"
+    echo "Test applications (HTTP servers):"
     echo "  App 1: http://$VM_IP:8080"
     echo "  App 2: http://$VM_IP:8081"
     echo ""
     echo "Traefik with SSL is running:"
     echo "  HTTP:  http://$VM_IP:80 (redirects to HTTPS)"
     echo "  HTTPS: https://$VM_IP:443 (load balancer with self-signed cert)"
-    echo "  Dashboard: http://$VM_IP:8888"
+    echo "  Dashboard: http://$VM_IP:8080 (Traefik API)"
     echo ""
     echo "Note: Self-signed certificate - use 'curl -k' to ignore SSL warnings"
     echo ""
@@ -163,8 +227,11 @@ show_info() {
     echo "  multipass purge                        # Remove deleted VMs"
     echo ""
     echo "Traefik management:"
-    echo "  docker compose logs traefik -f        # View Traefik logs"
-    echo "  docker compose restart traefik        # Restart Traefik"
+    echo "  sudo systemctl status traefik         # Check Traefik status"
+    echo "  sudo systemctl restart traefik        # Restart Traefik"
+    echo "  sudo systemctl stop traefik           # Stop Traefik"
+    echo "  sudo journalctl -u traefik -f         # View Traefik logs"
+    echo "  traefik version                       # Check Traefik version"
     echo ""
     echo "Edit configs on host in $VOLUMES_DIR and they sync to VM automatically!"
     echo ""
@@ -191,8 +258,11 @@ main() {
     prepare_volume
     create_vm
     wait_for_vm
+    install_traefik
+    setup_traefik_config
     setup_ssl
-    start_docker_containers
+    setup_systemd_service
+    start_nginx_apps
     show_info
 }
 

@@ -28,11 +28,6 @@ accessLog:
   format: json
 
 providers:
-  docker:
-    endpoint: "unix:///var/run/docker.sock"
-    exposedByDefault: false
-    network: traefik-network
-
   file:
     directory: /etc/traefik/config
     watch: true
@@ -41,7 +36,7 @@ tls:
   options:
     default:
       minVersion: VersionTLS12
-      sniStrict: true
+      sniStrict: false
       cipherSuites:
         - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
