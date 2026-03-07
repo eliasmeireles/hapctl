@@ -20,6 +20,45 @@ http:
         burst: 50
 
   routers:
+    # Router para grup-01.internal.network (portas 8081 e 8082)
+    grup01-router:
+      rule: "Host(`grup-01.internal.network`)"
+      entryPoints:
+        - websecure
+      service: grup01-service
+      tls: {}
+      middlewares:
+        - security-headers
+
+    # Router HTTP para grup-01 (redirect para HTTPS)
+    grup01-http-router:
+      rule: "Host(`grup-01.internal.network`)"
+      entryPoints:
+        - web
+      service: grup01-service
+      middlewares:
+        - redirect-to-https
+
+    # Router para grup-02.internal.network (portas 8083 e 8084)
+    grup02-router:
+      rule: "Host(`grup-02.internal.network`)"
+      entryPoints:
+        - websecure
+      service: grup02-service
+      tls: {}
+      middlewares:
+        - security-headers
+
+    # Router HTTP para grup-02 (redirect para HTTPS)
+    grup02-http-router:
+      rule: "Host(`grup-02.internal.network`)"
+      entryPoints:
+        - web
+      service: grup02-service
+      middlewares:
+        - redirect-to-https
+
+    # Router default (load balancer) para qualquer outro domínio
     default-router:
       rule: "PathPrefix(`/`)"
       entryPoints:
@@ -28,13 +67,39 @@ http:
       tls: {}
       middlewares:
         - security-headers
+      priority: 1
 
   services:
+    # Serviço para grup-01.internal.network (load balancer entre 8081 e 8082)
+    grup01-service:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8081"
+          - url: "http://127.0.0.1:8082"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    # Serviço para grup-02.internal.network (load balancer entre 8083 e 8084)
+    grup02-service:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8083"
+          - url: "http://127.0.0.1:8084"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
+
+    # Load balancer default (round-robin entre todos os servidores)
     load-balancer:
       loadBalancer:
         servers:
           - url: "http://127.0.0.1:8081"
           - url: "http://127.0.0.1:8082"
+          - url: "http://127.0.0.1:8083"
+          - url: "http://127.0.0.1:8084"
         healthCheck:
           path: /health
           interval: 10s

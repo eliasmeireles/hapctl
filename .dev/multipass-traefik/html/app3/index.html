@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App 3 - Grupo 02</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        h1 { font-size: 3em; margin: 0; }
+        p { font-size: 1.2em; margin-top: 20px; }
+        .badge { 
+            background: #00BCD4; 
+            padding: 10px 20px; 
+            border-radius: 25px; 
+            display: inline-block;
+            margin-top: 20px;
+        }
+        .group {
+            background: #009688;
+            padding: 8px 16px;
+            border-radius: 15px;
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 Application 3</h1>
+        <p>Served by Traefik Load Balancer</p>
+        <div class="badge">Backend Server: nginx-app3 (Port 8083)</div>
+        <div class="group">Grupo: grup-02.internal.network</div>
+    </div>
+</body>
+</html>

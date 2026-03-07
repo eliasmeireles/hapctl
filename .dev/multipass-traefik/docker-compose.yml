@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   nginx-app1:
@@ -10,7 +10,15 @@ services:
       - ./html/app1:/usr/share/nginx/html:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -24,7 +32,59 @@ services:
       - ./html/app2:/usr/share/nginx/html:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  nginx-app3:
+    image: nginx:alpine
+    container_name: nginx-app3
+    ports:
+      - "8083:80"
+    volumes:
+      - ./html/app3:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  nginx-app4:
+    image: nginx:alpine
+    container_name: nginx-app4
+    ports:
+      - "8084:80"
+    volumes:
+      - ./html/app4:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/health",
+        ]
       interval: 10s
       timeout: 3s
       retries: 3
