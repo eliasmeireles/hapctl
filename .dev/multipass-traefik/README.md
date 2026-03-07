@@ -61,9 +61,9 @@ After setup completes, you'll have access to:
 
 - **HTTP**: `http://<VM_IP>:80` (redirects to HTTPS)
 - **HTTPS**: `https://<VM_IP>:443` (load balanced)
-- **Traefik Dashboard**: `http://<VM_IP>:8888` (Traefik API)
-- **App 1 Direct**: `http://<VM_IP>:8080` (nginx-app1 container)
-- **App 2 Direct**: `http://<VM_IP>:8081` (nginx-app2 container)
+- **Traefik Dashboard**: `http://<VM_IP>:8080` (Traefik API)
+- **App 1 Direct**: `http://<VM_IP>:8081` (nginx-app1 container)
+- **App 2 Direct**: `http://<VM_IP>:8082` (nginx-app2 container)
 
 ## Configuration Files
 

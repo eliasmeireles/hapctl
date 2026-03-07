@@ -187,7 +187,7 @@ start_nginx_apps() {
 
     multipass exec "$VM_NAME" -- docker ps
 
-    echo "✅ Nginx Docker containers started on ports 8080 and 8081"
+    echo "✅ Nginx Docker containers started on ports 8081 and 8082"
 }
 
 show_info() {
@@ -210,13 +210,13 @@ show_info() {
     echo "  Linked: /etc/traefik/shared -> /home/ubuntu/traefik"
     echo ""
     echo "Test applications (Docker containers):"
-    echo "  App 1: http://$VM_IP:8080 (nginx-app1)"
-    echo "  App 2: http://$VM_IP:8081 (nginx-app2)"
+    echo "  App 1: http://$VM_IP:8081 (nginx-app1)"
+    echo "  App 2: http://$VM_IP:8082 (nginx-app2)"
     echo ""
     echo "Traefik with SSL is running:"
     echo "  HTTP:  http://$VM_IP:80 (redirects to HTTPS)"
     echo "  HTTPS: https://$VM_IP:443 (load balancer with self-signed cert)"
-    echo "  Dashboard: http://$VM_IP:8888 (Traefik API)"
+    echo "  Dashboard: http://$VM_IP:8080 (Traefik API)"
     echo ""
     echo "Note: Self-signed certificate - use 'curl -k' to ignore SSL warnings"
     echo ""
