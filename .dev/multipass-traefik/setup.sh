@@ -75,7 +75,7 @@ wait_for_vm() {
     sleep 10
 
     for i in {1..30}; do
-        if multipass exec "$VM_NAME" -- cloud-init status --wait &> /dev/null; then
+        if multipass exec "$VM_NAME" -- systemctl is-active docker &> /dev/null; then
             echo "✅ VM is ready"
             return 0
         fi
@@ -97,6 +97,7 @@ prepare_volume() {
 
     cp "$SCRIPT_DIR/traefik.yml" "$VOLUMES_DIR/"
     cp "$SCRIPT_DIR/dynamic-config.yml" "$VOLUMES_DIR/config/"
+    cp "$SCRIPT_DIR/docker-compose.yml" "$VOLUMES_DIR/"
     cp -r "$SCRIPT_DIR/html" "$VOLUMES_DIR/"
     cp "$SCRIPT_DIR/generate-ssl.sh" "$VOLUMES_DIR/"
 
@@ -178,14 +179,15 @@ setup_systemd_service() {
 
 start_nginx_apps() {
     echo ""
-    echo "Starting nginx test applications..."
+    echo "Starting nginx test applications with Docker..."
 
-    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik/html/app1 && sudo python3 -m http.server 8080 > /dev/null 2>&1 &"
-    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik/html/app2 && sudo python3 -m http.server 8081 > /dev/null 2>&1 &"
+    multipass exec "$VM_NAME" -- bash -c "cd /home/ubuntu/traefik && docker compose up -d"
 
-    sleep 2
+    sleep 5
 
-    echo "✅ Nginx test applications started on ports 8080 and 8081"
+    multipass exec "$VM_NAME" -- docker ps
+
+    echo "✅ Nginx Docker containers started on ports 8080 and 8081"
 }
 
 show_info() {
@@ -207,14 +209,14 @@ show_info() {
     echo "  VM:   /home/ubuntu/traefik"
     echo "  Linked: /etc/traefik/shared -> /home/ubuntu/traefik"
     echo ""
-    echo "Test applications (HTTP servers):"
-    echo "  App 1: http://$VM_IP:8080"
-    echo "  App 2: http://$VM_IP:8081"
+    echo "Test applications (Docker containers):"
+    echo "  App 1: http://$VM_IP:8080 (nginx-app1)"
+    echo "  App 2: http://$VM_IP:8081 (nginx-app2)"
     echo ""
     echo "Traefik with SSL is running:"
     echo "  HTTP:  http://$VM_IP:80 (redirects to HTTPS)"
     echo "  HTTPS: https://$VM_IP:443 (load balancer with self-signed cert)"
-    echo "  Dashboard: http://$VM_IP:8080 (Traefik API)"
+    echo "  Dashboard: http://$VM_IP:8888 (Traefik API)"
     echo ""
     echo "Note: Self-signed certificate - use 'curl -k' to ignore SSL warnings"
     echo ""
@@ -226,12 +228,17 @@ show_info() {
     echo "  multipass delete $VM_NAME              # Delete VM"
     echo "  multipass purge                        # Remove deleted VMs"
     echo ""
-    echo "Traefik management:"
+    echo "Traefik management (native binary):"
     echo "  sudo systemctl status traefik         # Check Traefik status"
     echo "  sudo systemctl restart traefik        # Restart Traefik"
     echo "  sudo systemctl stop traefik           # Stop Traefik"
     echo "  sudo journalctl -u traefik -f         # View Traefik logs"
     echo "  traefik version                       # Check Traefik version"
+    echo ""
+    echo "Docker apps management:"
+    echo "  docker compose ps                     # List containers"
+    echo "  docker compose logs -f                # View container logs"
+    echo "  docker compose restart                # Restart containers"
     echo ""
     echo "Edit configs on host in $VOLUMES_DIR and they sync to VM automatically!"
     echo ""
