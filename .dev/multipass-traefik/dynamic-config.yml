@@ -1,0 +1,41 @@
+http:
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    security-headers:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+  routers:
+    default-router:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - websecure
+      service: load-balancer
+      tls: {}
+      middlewares:
+        - security-headers
+
+  services:
+    load-balancer:
+      loadBalancer:
+        servers:
+          - url: "http://nginx-app1:80"
+          - url: "http://nginx-app2:80"
+        healthCheck:
+          path: /health
+          interval: 10s
+          timeout: 3s
