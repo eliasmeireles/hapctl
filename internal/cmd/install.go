@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -42,6 +43,43 @@ func init() {
 		"/etc/haproxy/haproxy.cfg",
 		"Path to HAProxy config file",
 	)
+}
+
+func ensureHAProxyUserExists() error {
+	cmd := exec.Command("id", "-u", "haproxy")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("haproxy user does not exist")
+	}
+	return nil
+}
+
+func createHAProxyUser() error {
+	groupCmd := exec.Command("groupadd", "--system", "haproxy")
+	if err := groupCmd.Run(); err != nil {
+		checkGroupCmd := exec.Command("getent", "group", "haproxy")
+		if checkGroupCmd.Run() != nil {
+			return fmt.Errorf("failed to create haproxy group: %w", err)
+		}
+	}
+
+	userCmd := exec.Command("useradd",
+		"--system",
+		"--gid", "haproxy",
+		"--home-dir", "/var/lib/haproxy",
+		"--no-create-home",
+		"--shell", "/usr/sbin/nologin",
+		"--comment", "HAProxy system user",
+		"haproxy")
+
+	if err := userCmd.Run(); err != nil {
+		checkUserCmd := exec.Command("id", "-u", "haproxy")
+		if checkUserCmd.Run() != nil {
+			return fmt.Errorf("failed to create haproxy user: %w", err)
+		}
+	}
+
+	logger.Info("✅ HAProxy user and group created successfully")
+	return nil
 }
 
 func checkAndFixPermissions(filePath string, expectedMode os.FileMode) error {
@@ -97,6 +135,15 @@ func ensureDirectoryPermissions(dirPath string, expectedMode os.FileMode) error 
 }
 
 func generateHAProxyConfigNonInteractive() error {
+	if err := ensureHAProxyUserExists(); err != nil {
+		logger.Warn("⚠️  HAProxy user/group may not exist: %v", err)
+		logger.Info("Attempting to create haproxy user/group...")
+		if err := createHAProxyUser(); err != nil {
+			logger.Error("Failed to create haproxy user/group: %v", err)
+			logger.Info("You may need to create it manually: sudo useradd --system haproxy")
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}

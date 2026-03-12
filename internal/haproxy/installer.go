@@ -50,6 +50,10 @@ func (i *Installer) Install() error {
 func (i *Installer) installWithApt() error {
 	logger.Info("Installing HAProxy using apt...")
 
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to create haproxy user/group: %v", err)
+	}
+
 	logger.Info("Updating package list...")
 	if err := i.runCommand("apt-get", "update"); err != nil {
 		return fmt.Errorf("failed to update package list: %w", err)
@@ -58,6 +62,10 @@ func (i *Installer) installWithApt() error {
 	logger.Info("Installing haproxy package...")
 	if err := i.runCommand("apt-get", "install", "-y", "haproxy"); err != nil {
 		return fmt.Errorf("failed to install haproxy: %w", err)
+	}
+
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to verify haproxy user/group after installation: %v", err)
 	}
 
 	logger.Info("Enabling HAProxy service...")
@@ -77,8 +85,16 @@ func (i *Installer) installWithApt() error {
 func (i *Installer) installWithYum() error {
 	logger.Info("Installing HAProxy using yum...")
 
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to create haproxy user/group: %v", err)
+	}
+
 	if err := i.runCommand("yum", "install", "-y", "haproxy"); err != nil {
 		return fmt.Errorf("failed to install haproxy: %w", err)
+	}
+
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to verify haproxy user/group after installation: %v", err)
 	}
 
 	logger.Info("Enabling HAProxy service...")
@@ -93,8 +109,16 @@ func (i *Installer) installWithYum() error {
 func (i *Installer) installWithDnf() error {
 	logger.Info("Installing HAProxy using dnf...")
 
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to create haproxy user/group: %v", err)
+	}
+
 	if err := i.runCommand("dnf", "install", "-y", "haproxy"); err != nil {
 		return fmt.Errorf("failed to install haproxy: %w", err)
+	}
+
+	if err := i.ensureHAProxyUser(); err != nil {
+		logger.Error("Failed to verify haproxy user/group after installation: %v", err)
 	}
 
 	logger.Info("Enabling HAProxy service...")
@@ -117,6 +141,46 @@ func (i *Installer) runCommand(name string, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, string(output))
 	}
+	return nil
+}
+
+func (i *Installer) ensureHAProxyUser() error {
+	checkUserCmd := exec.Command("id", "-u", "haproxy")
+	if err := checkUserCmd.Run(); err == nil {
+		logger.Info("HAProxy user already exists")
+		return nil
+	}
+
+	logger.Info("Creating haproxy system user and group...")
+
+	groupCmd := exec.Command("groupadd", "--system", "haproxy")
+	if err := groupCmd.Run(); err != nil {
+		checkGroupCmd := exec.Command("getent", "group", "haproxy")
+		if checkGroupCmd.Run() != nil {
+			return fmt.Errorf("failed to create haproxy group: %w", err)
+		}
+		logger.Info("HAProxy group already exists")
+	}
+
+	userCmd := exec.Command("useradd",
+		"--system",
+		"--gid", "haproxy",
+		"--home-dir", "/var/lib/haproxy",
+		"--no-create-home",
+		"--shell", "/usr/sbin/nologin",
+		"--comment", "HAProxy system user",
+		"haproxy")
+
+	if err := userCmd.Run(); err != nil {
+		checkUserCmd := exec.Command("id", "-u", "haproxy")
+		if checkUserCmd.Run() != nil {
+			return fmt.Errorf("failed to create haproxy user: %w", err)
+		}
+		logger.Info("HAProxy user already exists")
+		return nil
+	}
+
+	logger.Info("✅ HAProxy user and group created successfully")
 	return nil
 }
 
