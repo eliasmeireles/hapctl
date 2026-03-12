@@ -78,6 +78,11 @@ func (i *Installer) installWithApt() error {
 		logger.Error("Failed to configure HAProxy: %v", err)
 	}
 
+	logger.Info("Ensuring HAProxy runtime directory...")
+	if err := i.ensureRuntimeDirectory(); err != nil {
+		logger.Error("Failed to create HAProxy runtime directory: %v", err)
+	}
+
 	logger.Info("HAProxy installed successfully")
 	return nil
 }
@@ -102,6 +107,11 @@ func (i *Installer) installWithYum() error {
 		logger.Error("Failed to enable haproxy service: %v", err)
 	}
 
+	logger.Info("Ensuring HAProxy runtime directory...")
+	if err := i.ensureRuntimeDirectory(); err != nil {
+		logger.Error("Failed to create HAProxy runtime directory: %v", err)
+	}
+
 	logger.Info("HAProxy installed successfully")
 	return nil
 }
@@ -124,6 +134,11 @@ func (i *Installer) installWithDnf() error {
 	logger.Info("Enabling HAProxy service...")
 	if err := i.runCommand("systemctl", "enable", "haproxy"); err != nil {
 		logger.Error("Failed to enable haproxy service: %v", err)
+	}
+
+	logger.Info("Ensuring HAProxy runtime directory...")
+	if err := i.ensureRuntimeDirectory(); err != nil {
+		logger.Error("Failed to create HAProxy runtime directory: %v", err)
 	}
 
 	logger.Info("HAProxy installed successfully")
@@ -205,5 +220,31 @@ func (i *Installer) ConfigureHAProxy() error {
 	}
 
 	logger.Info("HAProxy configuration updated")
+	return nil
+}
+
+func (i *Installer) ensureRuntimeDirectory() error {
+	runtimeDir := "/run/haproxy"
+
+	// Check if directory exists
+	checkCmd := exec.Command("test", "-d", runtimeDir)
+	if checkCmd.Run() == nil {
+		logger.Info("HAProxy runtime directory already exists")
+		return nil
+	}
+
+	logger.Info("Creating HAProxy runtime directory: %s", runtimeDir)
+
+	// Create directory
+	if err := i.runCommand("mkdir", "-p", runtimeDir); err != nil {
+		return fmt.Errorf("failed to create runtime directory: %w", err)
+	}
+
+	// Set ownership to haproxy user
+	if err := i.runCommand("chown", "haproxy:haproxy", runtimeDir); err != nil {
+		logger.Warn("Failed to set ownership on runtime directory: %v (continuing anyway)", err)
+	}
+
+	logger.Info("✅ HAProxy runtime directory created successfully")
 	return nil
 }
